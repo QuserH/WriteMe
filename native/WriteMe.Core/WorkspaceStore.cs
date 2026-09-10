@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 
 namespace WriteMe.Core;
 
-public sealed record PageAppearance(string Font = "sans", double FontSize = 15, double Width = 860, string? Background = null, double LineHeight = 1.2, string? TextColor = null,
+public sealed record PageAppearance(string Font = "sans", double FontSize = 16, double Width = 900, string? Background = null, double LineHeight = 1.35, string? TextColor = null,
     string? CoverAssetId = null, string Divider = "line");
 public sealed record AppPreferences(string Theme = "light", double GhostOpacity = .85);
 public sealed record AssetInfo(string Id, string Name, string MediaType, long Size);

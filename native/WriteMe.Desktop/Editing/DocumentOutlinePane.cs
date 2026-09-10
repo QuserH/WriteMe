@@ -16,7 +16,7 @@ namespace WriteMe.Desktop.Editing;
 public sealed class DocumentOutlinePane : UserControl
 {
     private readonly BlockEditor _owner;
-    private readonly TextBlock _title = new() { FontSize = 13, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly TextBlock _title = new() { FontSize = 14, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _updated = new() { FontSize = 11, Foreground = Ui.Chrome("#A1A5AC"), Margin = new(0, 3, 0, 0) };
     private readonly ListBox _list = new() { BorderThickness = new(0), Background = Brushes.Transparent, Padding = new(0), Margin = new(10, 0, 12, 0), Focusable = true };
     private readonly TextBlock _empty = new() { Text = "使用标题创建目录。", FontSize = 12, Foreground = Ui.Chrome("#93989F"), Margin = new(18, 9, 16, 0), TextWrapping = TextWrapping.Wrap };
@@ -54,7 +54,7 @@ public sealed class DocumentOutlinePane : UserControl
             if (entry == null) return new TextBlock();
             var text = new TextBlock
             {
-                Text = entry.Title, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis,
+                Text = entry.Title, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis,
                 FontWeight = entry.HeadingLevel == 1 ? FontWeight.Medium : FontWeight.Normal,
                 Margin = new(entry.Depth * 14, 0, 0, 0)
             };
@@ -103,15 +103,10 @@ public sealed class DocumentOutlinePane : UserControl
     private void NavigateSelected()
     {
         if (!CanNavigate() || _list.SelectedItem is not OutlineEntry entry || !_entries.Contains(entry)) return;
-        if (_owner.Session.Reveal(entry.NodeId))
-        {
-            _owner.SyncSurface();
-            _owner.FocusText();
-            _owner.Surface.ScrollTo(_owner.Surface.TextArea.Caret.Line, _owner.Surface.TextArea.Caret.Column);
-        }
+        _owner.NavigateTo(entry.NodeId);
     }
 
-    private bool CanNavigate() => _owner.IsEnabled && !_owner.InputClient.IsComposing
+    private bool CanNavigate() => _owner.IsEnabled && !_owner.IsAnyComposing
         && ReferenceEquals(_session, _owner.Session) && ReferenceEquals(_root, _owner.Session.Root)
         && _owner.Surface.Document.TextLength == _owner.Session.Projection.Text.Length;
 

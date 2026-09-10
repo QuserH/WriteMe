@@ -23,11 +23,12 @@ Status: implemented
 
 - `NoteNode` 是不可变节点，运行期 GUID 稳定；`NoteJson` 延续 TipTap JSON 契约，保留 marks、未知属性与未知块。旧 `attrs.title` 转成标题段落时区分空标题与缺失标题，不吞掉第一个正文子块。旧纯文本保留空行及空白。
 - `DocumentProjection` 把可见文字块投影到一个 AvaloniaEdit 文本表面。收起子树仅保留在文档模型，不进入文字投影；行缩进、折叠三角和手柄只为视口内行创建控件。`BlockRendering` 按 marks 和块类型绘制文字样式；`ToggleDisclosureButton` 与 `BlockLayout` 统一 Craft 参考的矢量三角、28px 标记列与层级间距。`BlockTextFormatter` 局部补齐续行缩进，使绘制、命中和选区坐标一致；固定包版本的兼容入口与升级约束见 [折叠块](../feature/2026-09-09-toggle-block.md)。
-- `DocumentSession` 统一处理文字、格式、折叠与移动的撤销/重做，历史最多 200 项，同一文字块的连续输入以 750ms 分组；选区替换与 Enter 合并为一次事务。AvaloniaEdit 的默认历史不作为第二个事实来源。收起后若光标位于隐藏子树，定位到可见祖先标题。
+- `DocumentSession` 统一处理文字、格式、折叠、移动与复合块的撤销/重做，历史最多 200 项，同一区域内同一文字块的连续输入以 750ms 分组；每项保留事务前后的文档与选区，后续光标导航不能改写重做的位置。选区替换与 Enter 合并为一次事务。AvaloniaEdit 的默认历史不作为第二个事实来源。收起后若光标位于隐藏子树，定位到可见祖先标题。
+- 表格和分栏采用原生区域编辑，`CreateScope` 把单元格/栏事务提交到根会话，父投影将其视为原子块并用 `LayoutHost` 定位内部文字。稳定控件、IME 归属、TSV、列宽和无损取消规则见 [表格与分栏](../feature/2026-09-11-native-tables-columns-and-editing.md)。完整选区可以删除复合块；未知占位提示的局部字符编辑继续受到保护。
 - 新建折叠项默认收起，显示右箭头；折叠标题（包括空标题）Enter 创建子折叠项并展开父级，下箭头与左侧祖先线同步出现，新子项仍收起。Ctrl+Enter 创建同级，Tab/Shift+Tab 调整折叠层级。只有标题的叶节点始终显示右箭头；既有 JSON 状态不被统一重写，细节见 [折叠交互](../feature/2026-09-09-toggle-block.md)。斜杠菜单按中文、英文及拼音别名筛选，转换时移除完整 `/query` 并保留后文。块菜单支持保留内容的取消折叠。
 - `NativeInputClient` 将中文预编辑与已提交文字分开。composition 时 Enter/Tab/Delete 等结构或默认文字编辑键标记为已处理，直到提交的 TextInput 到达；仅从自定义处理器 return 会继续触发 AvaloniaEdit 默认处理器，仍会误插入换行。
 - 原生文字格式采用选区浮动工具栏，支持混合状态、九种预设文字色、自定义十六进制色与恢复默认、五色高亮、跨样式链接范围、草稿失效与键盘导航，见 [文字格式工具栏](../feature/2026-09-09-text-formatting-toolbar.md)。`TextColor.cs` 使用标准 `textStyle.color`，恢复默认保留同一 mark 的其他属性；`TextColorPicker.cs` 供浮层与右栏共用。文字颜色、链接和高亮使用显式设置，重复应用相同值不删除格式或增加空历史；常驻格式栏与独立链接窗口已移除。
-- `DocumentOutlinePane` 放在 292px 左栏的当前文档模式，底部胶囊可切到空间笔记列表。目录只收录真正的 heading，包含收起祖先内部标题，按标题等级组织；普通折叠标题不进入目录。点击或 Enter 激活条目才按需展开和跳转，获得焦点不改变折叠状态。`EditorSidebar` 右侧胶囊提供插入、Aa、页面与信息，面板采用紧凑单列选项、文字样式网格及分段控件；`SidebarGlyph` 原生绘制统一图标，`Themes/EditorSidebar.axaml` 管理按钮状态。标题与正文为工具面板预留空间，窄窗口暂时让出左栏并保留模式偏好。插入与转换分别进入文档事务；侧栏与选区浮层共享格式事实，统一历史和自动保存保持不变。左右分工、快捷键与虚拟化见 [编辑导航](../feature/2026-09-09-editor-sidebar.md)。
+- `DocumentOutlinePane` 放在 292px 左栏的当前文档模式，底部胶囊可切到空间笔记列表。目录只收录真正的 heading，包含收起祖先、表格与分栏内部标题，按标题等级组织；普通折叠标题不进入目录。点击或 Enter 激活条目才按需展开和跳转，获得焦点不改变折叠状态。`EditorSidebar` 位于纸张外，收起为胶囊，展开为 280px 的插入/格式/样式/信息横向标签与工具区；`SidebarGlyph` 原生绘制统一图标，`Themes/EditorSidebar.axaml` 管理按钮状态。窄窗口暂时让出左栏并保留模式偏好。插入与转换分别进入当前活动区域的事务；侧栏与选区浮层共享格式事实，统一历史和自动保存保持不变。左右分工、快捷键与虚拟化见 [编辑导航](../feature/2026-09-09-editor-sidebar.md)。
 
 ### 手柄与子折叠块拖出
 
@@ -54,12 +55,12 @@ Status: implemented
 
 ## Verification
 
-- `npm run native:build` 无警告/错误，`npm run native:test`：153 项通过。覆盖富文本/未知块 JSON 往返、旧空标题、五级折叠、跨块选区、emoji/软换行、统一撤销、子树移动与循环拒绝、SQLite WAL 在线导入和保存重开，并包含选区浮层与右侧工具栏的指针/键盘/草稿/保存回归、新建箭头与 Enter 层级、缩进按钮保留折叠子树、列表编号、左侧标题目录与虚拟化，以及长标题和连续软换行的续行缩进/选区/点击/输入回归。
+- `npm run native:build` 无警告/错误，`npm run native:test`：180 项通过。覆盖富文本/未知块 JSON 往返、旧空标题、五级折叠、跨块选区、emoji/软换行、统一撤销、子树移动与循环拒绝、SQLite WAL 在线导入和保存重开，并包含选区浮层与右侧工具栏的指针/键盘/草稿/保存回归、新建箭头与 Enter 层级、缩进按钮保留折叠子树、列表编号、左侧标题目录与虚拟化，以及长标题和连续软换行的续行缩进/选区/点击/输入回归。表格/分栏的模型、剪贴板、区域焦点、宽度、主题与集成检查集中在三个 `Layout*Tests.cs`。
 - `TaskEditingTests.cs` 的 6 项回归覆盖已完成/未完成待办的段首退出、保留邻项与折叠子树、清空文字后三种键盘出口、实际指针点击手柄打开删除菜单和连续撤销。`TextColorTests.cs` 的 6 项回归覆盖文字颜色范围、保留其他 textStyle 属性、默认恢复、软换行与隐藏子树、实际文字 run 绘制、双入口自定义色/中文预编辑/旧文档草稿、窄窗口及颜色与待办退出后的 SQLite 保存。持久化重开用内容与节点类型定位，不把运行期 GUID 当作持久化 ID。
 - Avalonia headless 测试执行原生键盘及指针路径：手柄初始隐藏、只悬停一个、移开隐藏；展开和收起的子折叠块分别拖到父级外，保持类型/子树/状态并可撤销；选中文字的拖动不能绕过块事务；composition 不保存候选拼音，Enter 不误建块；窗口立即切换/关闭也保存未落盘修改。
 - 渲染测试检查实际 native text run 的粗体、高亮及标题字号；10,000 块测试检查只为视口创建装饰控件，以及隐藏的 10,000 个子块不进入文字投影。这是虚拟化与投影正确性验证，不是输入延迟或滚动帧率跑分。
 - Windows 发布版实际鼠标验证使用 `artifacts/native-qa/`：拖出子折叠块后，三角和孙级内容仍存在，点击三角可正常隐藏孙级。真实中文输入法验证 `ni` 候选后空格提交“你”，候选阶段只读库正文仍未改变；候选确认 Return 不误建子项，确认后的普通 Return 才创建子折叠块。
-- `npm run native:release` 已生成自包含 Windows 发布版 `artifacts/native/m3-m6-win-x64/WriteME.Native.exe`，无窗口 `--smoke-test` 在新建隔离目录返回成功，验证随包运行时、SQLite、中文检索和标签。既有 Web 基线的 `npm run build` 与完整路径 `cargo build` 通过。Web 编辑器已有 45 项 Playwright 回归，本轮 M3–M6 原生扩展未改变 Web 编辑行为。
+- `npm run native:release` 生成自包含 Windows 发布版 `artifacts/native/craft-layout-win-x64/WriteME.Native.exe`，无窗口 `--smoke-test` 在新建隔离目录返回成功，验证随包运行时、SQLite、中文检索和标签。既有 Web 基线的 `npm run build` 与完整路径 `cargo build --locked` 通过。Web 编辑器已有 45 项 Playwright 回归，本轮原生排版扩展未改变 Web 编辑行为。
 
 ## Measurement boundaries
 

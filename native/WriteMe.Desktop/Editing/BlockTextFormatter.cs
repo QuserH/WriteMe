@@ -7,9 +7,9 @@ using AvaloniaEdit.Rendering;
 namespace WriteMe.Desktop.Editing;
 
 // Note: 折叠长标题的续行、选区和命中统一缩进 — 见 .agents/notes/implemented/feature/2026-09-09-toggle-block.md
-internal sealed class BlockTextFormatter(TextFormatter inner) : TextFormatter
+internal sealed class BlockTextFormatter(TextFormatter inner, BlockEditor owner) : TextFormatter
 {
-    public static void Attach(TextView view)
+    public static void Attach(TextView view, BlockEditor owner)
     {
         Install();
         view.DocumentChanged += (_, _) => Install();
@@ -17,19 +17,37 @@ internal sealed class BlockTextFormatter(TextFormatter inner) : TextFormatter
         {
             ref var formatter = ref Formatter(view);
             if (formatter is not null and not BlockTextFormatter)
-                formatter = new BlockTextFormatter(formatter);
+                formatter = new BlockTextFormatter(formatter, owner);
         }
     }
 
     public override TextLine? FormatLine(ITextSource textSource, int firstTextSourceIndex, double paragraphWidth,
         TextParagraphProperties paragraphProperties, TextLineBreak? previousLineBreak = null)
     {
+        if (textSource is ITextRunConstructionContext source)
+        {
+            var row = owner.Session.Projection.At(source.VisualLine.FirstDocumentLine.Offset);
+            var alignment = row.Node.String("textAlign") switch { "center" => TextAlignment.Center, "right" => TextAlignment.Right, "justify" => TextAlignment.Justify, _ => TextAlignment.Left };
+            if (alignment != TextAlignment.Left && !row.IsAtomic) paragraphProperties = new AlignedProperties(paragraphProperties, alignment);
+        }
         var inset = firstTextSourceIndex > 0 && textSource is ITextRunConstructionContext context &&
             context.VisualLine.Elements.FirstOrDefault() is BlockPrefixGenerator.PrefixElement prefix
             ? prefix.TextInset : 0;
         var line = inner.FormatLine(textSource, firstTextSourceIndex, Math.Max(1, paragraphWidth - inset),
             paragraphProperties, previousLineBreak);
         return line is not null && inset > 0 ? new IndentedLine(line, inset) : line;
+    }
+
+    private sealed class AlignedProperties(TextParagraphProperties source, TextAlignment alignment) : TextParagraphProperties
+    {
+        public override FlowDirection FlowDirection => source.FlowDirection;
+        public override TextAlignment TextAlignment => alignment;
+        public override double LineHeight => source.LineHeight;
+        public override bool FirstLineInParagraph => source.FirstLineInParagraph;
+        public override TextRunProperties DefaultTextRunProperties => source.DefaultTextRunProperties;
+        public override TextWrapping TextWrapping => source.TextWrapping;
+        public override double Indent => source.Indent;
+        public override double DefaultIncrementalTab => source.DefaultIncrementalTab;
     }
 
     // AvaloniaEdit 11.4.1 never initializes its firstLineInParagraph flag, and Avalonia 11.3.21

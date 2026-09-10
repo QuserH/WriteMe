@@ -72,7 +72,9 @@ public sealed partial class MainWindow
             } : new Control[]
             {
                 Menu(item.Info.IsFavorite ? "取消收藏" : "收藏文档", () => { _store.SetFavorite(id, !item.Info.IsFavorite); if (_active.Id == id) _active = _store.Get(id); ReloadDocuments(); }),
-                AsyncMenu("移动到…", async () => { await SwitchAsync(id); await MoveActiveAsync(); })
+                AsyncMenu("移动到…", async () => { await SwitchAsync(id); await MoveActiveAsync(); }),
+                AsyncMenu("创建副本", async () => { await SwitchAsync(id); await DuplicateAsync(); }),
+                AsyncMenu("移至回收站", async () => { await SwitchAsync(id); await DeleteAsync(); })
             };
             new ContextMenu { ItemsSource = entries }.Open(_list); e.Handled = true;
         };
@@ -94,11 +96,11 @@ public sealed partial class MainWindow
 
     private static Button NavigationButton(string label, string symbol, Action action, bool selected = false, string? automationId = null)
     {
-        var button = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new(10, 7), MinHeight = 31 };
-        button.Classes.Add("quiet"); button.Classes.Set("active", selected);
-        var grid = new Grid { ColumnDefinitions = new("24,*") };
-        grid.Children.Add(new TextBlock { Text = symbol, Foreground = Ui.Muted, FontSize = 15, VerticalAlignment = VerticalAlignment.Center });
-        var text = new TextBlock { Text = label, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var button = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new(11, 9), MinHeight = 36, CornerRadius = new(8) };
+        button.Classes.Add("quiet"); button.Classes.Add("libraryNav"); button.Classes.Set("active", selected);
+        var grid = new Grid { ColumnDefinitions = new(symbol.Length == 0 ? "0,*" : "29,*") };
+        if (symbol.Length > 0) grid.Children.Add(new SidebarGlyph(symbol switch { "▤" => SidebarSymbol.Grid, "◷" => SidebarSymbol.Clock, "☆" => SidebarSymbol.Star, "▱" => SidebarSymbol.Folder, "#" => SidebarSymbol.Tag, "▦" => SidebarSymbol.Calendar, _ => SidebarSymbol.Document }, 17) { VerticalAlignment = VerticalAlignment.Center });
+        var text = new TextBlock { Text = label, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(text, 1); grid.Children.Add(text); button.Content = grid;
         AutomationProperties.SetName(button, label);
         if (automationId != null) AutomationProperties.SetAutomationId(button, automationId);
@@ -154,7 +156,8 @@ public sealed partial class MainWindow
     private void RefreshReferences()
     {
         var active = _store.Get(_active.Id);
-        this.FindControl<Button>("FavoriteButton")!.Content = active.IsFavorite ? "★" : "☆";
+        this.FindControl<Button>("FavoriteButton")!.Content = new SidebarGlyph(SidebarSymbol.Star, 18);
+        this.FindControl<Button>("FavoriteButton")!.Foreground = active.IsFavorite ? Ui.Accent : Ui.Muted;
         _editor.SetReferenceCatalogue(_store.List(), _store.Tags());
         var content = new StackPanel { Spacing = 4 };
         content.Children.Add(new Border { Height = 1, Background = Ui.Line, Margin = new(0, 4, 0, 8) });
@@ -204,11 +207,10 @@ public sealed partial class MainWindow
     {
         if (ActiveHasConflict) { _status.Text = "请先在同步面板中选择冲突版本"; return; }
         var node = NoteReferences.AtPath(_editor.Session.Root, path);
-        if (node == null || !_editor.Session.Reveal(node.Id)) return;
-        if (_editor.Session.Projection.Find(node.Id) is not { } row) return;
-        start = Math.Clamp(start, 0, row.Text.Length);
-        _editor.Surface.Select(row.Start + start, Math.Clamp(length, 0, row.Text.Length - start));
-        _editor.Surface.ScrollTo(_editor.Surface.TextArea.Caret.Line, _editor.Surface.TextArea.Caret.Column); _editor.FocusText();
+        if (node == null) return;
+        var textLength = node.IsTextBlock ? RichText.Plain(node).Length : 1;
+        start = Math.Clamp(start, 0, textLength);
+        _editor.NavigateTo(node.Id, start, Math.Clamp(length, 0, textLength - start));
     }
 
     private async Task CreateSpaceAsync()

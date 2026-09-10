@@ -103,8 +103,10 @@ internal sealed class BlockPrefixGenerator(BlockEditor owner) : VisualLineElemen
     public override VisualLineElement ConstructElement(int offset)
     {
         var row = owner.Session.Projection.At(offset);
-        var panel = new Canvas { Width = BlockLayout.TextStart(row), Height = row.IsToggle || row.Depth > 0 ? 28 : 36, Background = Brushes.Transparent };
+        var inset = owner.PrefixInset(row);
+        var panel = new Canvas { Width = owner.TextStart(row), Height = owner.IsTableCell ? 26 : row.IsToggle || row.Depth > 0 ? 28 : 36, Background = Brushes.Transparent };
         TextBlock.SetBaselineOffset(panel, 17);
+        if (owner.IsTableCell && panel.Width == 0) return new PrefixElement(panel);
         var grip = Ui.Button("⠿", "拖动块；单击打开块菜单", () => { }, 22);
         grip.FontSize = 16;
         grip.MinWidth = 0;
@@ -115,7 +117,7 @@ internal sealed class BlockPrefixGenerator(BlockEditor owner) : VisualLineElemen
         grip.Tag = row.Block.Id;
         grip.Opacity = owner.HoveredBlockId == row.Block.Id ? 1 : 0;
         grip.IsHitTestVisible = grip.Opacity > 0;
-        Canvas.SetLeft(grip, BlockLayout.TextInset - 32 + row.Depth * BlockLayout.Indent);
+        Canvas.SetLeft(grip, BlockLayout.TextInset - 32 + row.Depth * BlockLayout.Indent - inset);
         Canvas.SetTop(grip, 1);
         grip.AddHandler(InputElement.PointerPressedEvent, (_, e) => owner.BeginBlockDrag(row, e), Avalonia.Interactivity.RoutingStrategies.Tunnel);
         panel.Children.Add(grip);
@@ -126,7 +128,7 @@ internal sealed class BlockPrefixGenerator(BlockEditor owner) : VisualLineElemen
             arrow.Tag = row.Block.Id;
             arrow.SetEmphasized(owner.HoveredBlockId == row.Block.Id || owner.Session.Selection.Caret.NodeId == row.Node.Id);
             AutomationProperties.SetHelpText(arrow, row.Text);
-            Canvas.SetLeft(arrow, BlockLayout.GuideX(row.Depth) - 12);
+            Canvas.SetLeft(arrow, BlockLayout.GuideX(row.Depth) - 12 - inset);
             Canvas.SetTop(arrow, 0);
             panel.Children.Add(arrow);
         }
@@ -138,13 +140,13 @@ internal sealed class BlockPrefixGenerator(BlockEditor owner) : VisualLineElemen
             check.Height = 24;
             check.Padding = new(0);
             check.Foreground = owner.PageMuted;
-            Canvas.SetLeft(check, BlockLayout.GuideX(row.Depth) - 12);
+            Canvas.SetLeft(check, BlockLayout.GuideX(row.Depth) - 12 - inset);
             panel.Children.Add(check);
         }
         else if (row.Marker.Length > 0)
         {
             var marker = new TextBlock { Text = row.Marker, FontSize = 15, Width = 24, TextAlignment = TextAlignment.Center, Foreground = owner.PageMuted, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-            Canvas.SetLeft(marker, BlockLayout.GuideX(row.Depth) - 12);
+            Canvas.SetLeft(marker, BlockLayout.GuideX(row.Depth) - 12 - inset);
             Canvas.SetTop(marker, 4);
             panel.Children.Add(marker);
         }
@@ -172,10 +174,11 @@ internal sealed class BlockBackgroundRenderer(BlockEditor owner) : IBackgroundRe
         {
             var row = owner.Session.Projection.At(line.FirstDocumentLine.Offset);
             var y = line.VisualTop - textView.ScrollOffset.Y;
-            var x = BlockLayout.TextStart(row);
+            var inset = owner.PrefixInset(row);
+            var x = owner.TextStart(row);
             if (row.IsToggle && owner.HoveredBlockId == row.Block.Id && owner.DropTarget == null)
             {
-                var left = BlockLayout.TextInset - 6 + row.Depth * BlockLayout.Indent;
+                var left = BlockLayout.TextInset - 6 + row.Depth * BlockLayout.Indent - inset;
                 context.DrawRectangle(owner.PageColor("#F5F7FC", "#2D3949"), null, new Rect(left, y + 2, Math.Max(1, textView.Bounds.Width - left), line.Height - 4), 4, 4);
             }
             if (row.Node.Type == "codeBlock") context.DrawRectangle(owner.PageColor("#F7F6F3", "#303843"), null, new Rect(x - 4, y, Math.Max(1, textView.Bounds.Width - x), line.Height), 5, 5);
@@ -185,10 +188,10 @@ internal sealed class BlockBackgroundRenderer(BlockEditor owner) : IBackgroundRe
             foreach (var depth in row.GuideDepths)
             {
                 var continues = row.Index + 1 < owner.Session.Projection.Rows.Length && owner.Session.Projection.Rows[row.Index + 1].GuideDepths.Contains(depth);
-                context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(depth), y), new(BlockLayout.GuideX(depth), y + line.Height - (continues ? 0 : 4)));
+                context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(depth) - inset, y), new(BlockLayout.GuideX(depth) - inset, y + line.Height - (continues ? 0 : 4)));
             }
             if (row.IsExpanded && line.Height > 25)
-                context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(row.Depth), y + 25), new(BlockLayout.GuideX(row.Depth), y + line.Height));
+                context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(row.Depth) - inset, y + 25), new(BlockLayout.GuideX(row.Depth) - inset, y + line.Height));
             if (owner.DropTarget is { } drop && drop.Target == row.Block.Id)
             {
                 var brush = Ui.Chrome("#7392AA");

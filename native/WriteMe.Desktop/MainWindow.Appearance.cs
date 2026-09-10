@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using WriteMe.Core;
 
@@ -29,6 +30,10 @@ public sealed partial class MainWindow
         _editor.AssetInvoked += async node => await RunUiAsync(() => OpenAssetAsync(node));
         _tools.ConfigureExtendedPanels(BuildPagePanel, BuildInfoPanel, image => _ = RunUiAsync(() => InsertAssetsAsync(image)));
         ApplyPageAppearance();
+        PropertyChanged += (_, args) =>
+        {
+            if (args.Property == ActualThemeVariantProperty) Dispatcher.UIThread.Post(() => { if (!_closed) ApplyPageAppearance(); }, DispatcherPriority.Background);
+        };
     }
     private void ApplyPreferences()
     {
@@ -60,7 +65,7 @@ public sealed partial class MainWindow
         this.FindControl<Border>("PageBackground")!.Background = _pageAppearance.Background == null ? Ui.Surface : Brush.Parse(_pageAppearance.Background);
         this.FindControl<Grid>("EditorHost")!.MaxWidth = _pageAppearance.Width;
         this.FindControl<Grid>("TitleRegion")!.MaxWidth = _pageAppearance.Width;
-        _editor.Surface.TextArea.TextView.Redraw();
+        _editor.RefreshPageAppearance();
     }
     private void ApplyCover()
     {
@@ -153,10 +158,10 @@ public sealed partial class MainWindow
         }
         panel.Children.Add(fonts);
         SliderRow("字号", "PageFontSize", 12, 24, 1, _pageAppearance.FontSize, value => Save(_pageAppearance with { FontSize = value }), value => value.ToString("0") + " px");
-        SliderRow("行距", "PageLineHeight", 1, 2, .1, _pageAppearance.LineHeight, value => Save(_pageAppearance with { LineHeight = value }), value => value.ToString("0.0"));
+        SliderRow("行距", "PageLineHeight", 1, 2, .05, _pageAppearance.LineHeight, value => Save(_pageAppearance with { LineHeight = value }), value => value.ToString("0.##"));
         panel.Children.Add(PanelHeading("高级"));
         var wide = new CheckBox { Content = "宽页", IsChecked = _pageAppearance.Width > 900 };
-        AutomationProperties.SetAutomationId(wide, "PageWide"); wide.IsCheckedChanged += (_, _) => Save(_pageAppearance with { Width = wide.IsChecked == true ? 1200 : 860 }); panel.Children.Add(wide);
+        AutomationProperties.SetAutomationId(wide, "PageWide"); wide.IsCheckedChanged += (_, _) => Save(_pageAppearance with { Width = wide.IsChecked == true ? 1200 : 900 }); panel.Children.Add(wide);
         panel.Children.Add(PanelAction("恢复默认页面样式", () => { Save(new()); _tools.RefreshExtendedPanel(true); }, "ResetPageAppearance"));
         return panel;
 

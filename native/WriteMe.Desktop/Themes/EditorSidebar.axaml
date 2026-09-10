@@ -18,6 +18,11 @@
     <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
     <Setter Property="Foreground" Value="{DynamicResource Chrome4A78C5}" />
   </Style>
+  <Style Selector="Button.sidebarTool.sidebarTab.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome365E9D}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
   <Style Selector="Button.sidebarClose">
     <Setter Property="Foreground" Value="{DynamicResource ChromeADB2BA}" />
   </Style>
@@ -84,6 +89,38 @@
     <Setter Property="Foreground" Value="{DynamicResource Chrome55677B}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Button).sidebarButton:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector=":is(Button).sidebarButton:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome747A84}" />
+  </Style>
+  <Style Selector=":is(Button).sidebarSegment:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector=":is(Button).sidebarSegment:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome747A84}" />
+  </Style>
+  <Style Selector="Button.sidebarSwatch:disabled">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <Style Selector="Button.sidebarSwatch:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+  <Style Selector=":is(StackPanel).textColorPicker:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector="TextBox.colorInput /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ChromeF2F4F6}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeE6E8ED}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="TextBox.colorInput:disabled /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ChromeF2F4F6}" />
   </Style>
   <Style Selector=":is(Button).sidebarButton:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource Chrome7D9FD7}" />

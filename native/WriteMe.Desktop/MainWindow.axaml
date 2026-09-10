@@ -1,16 +1,17 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:WriteMe.Desktop"
+        xmlns:editing="using:WriteMe.Desktop.Editing"
         x:Class="WriteMe.Desktop.MainWindow"
         Title="WriteME · 原生版" Width="1180" Height="820" MinWidth="780" MinHeight="560"
         WindowStartupLocation="CenterScreen" Icon="/Assets/icon.ico">
-  <Grid x:Name="Shell" ColumnDefinitions="292,*" RowDefinitions="48,*" Background="{DynamicResource ChromeFBFCFD}">
+  <Grid x:Name="Shell" ColumnDefinitions="292,*" RowDefinitions="56,*" Background="{DynamicResource ChromeF4F5F7}">
     <Grid Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" Margin="18,4,20,0">
       <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-        <TextBlock Text="W" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Chrome41464C}" VerticalAlignment="Center" />
+        <TextBlock Text="WriteME" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Chrome41464C}" VerticalAlignment="Center" />
         <Button x:Name="SidebarButton" Classes="quiet" ToolTip.Tip="显示或隐藏侧栏" AutomationProperties.Name="显示或隐藏侧栏" />
       </StackPanel>
-      <TextBlock x:Name="NavigationTitle" Grid.Column="1" Foreground="{DynamicResource Chrome959AA2}" FontSize="12" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="400" />
+      <TextBlock x:Name="NavigationTitle" Grid.Column="1" Foreground="{DynamicResource Chrome7B7D82}" FontSize="13" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="400" />
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
         <Button x:Name="SyncButton" Classes="quiet" Content="同步" FontSize="11" AutomationProperties.Name="资料库同步" AutomationProperties.AutomationId="SyncButton" />
         <Button x:Name="FavoriteButton" Classes="quiet" Content="☆" FontSize="19" ToolTip.Tip="收藏文档" AutomationProperties.Name="收藏文档" AutomationProperties.AutomationId="FavoriteDocument" Focusable="False" />
@@ -19,7 +20,7 @@
         <Button x:Name="MoreButton" Classes="quiet" Content="⋯" FontSize="18" AutomationProperties.Name="文档菜单" />
       </StackPanel>
     </Grid>
-    <Border x:Name="LibrarySidebar" Grid.Row="1" Background="{DynamicResource ChromeFBFCFD}" ClipToBounds="True">
+    <Border x:Name="LibrarySidebar" Grid.Row="1" Background="{DynamicResource ChromeF4F5F7}" ClipToBounds="True">
       <Grid RowDefinitions="*,Auto">
         <Grid x:Name="LeftPaneHost">
       <Grid x:Name="SpacePane" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
@@ -27,39 +28,40 @@
           <Border Background="{DynamicResource Chrome619786}" CornerRadius="6" Width="23" Height="23">
             <TextBlock Text="W" Foreground="White" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
-          <Button x:Name="SpaceSwitchButton" Grid.Column="1" Classes="quiet" Content="我的空间⌄" HorizontalContentAlignment="Left" FontWeight="SemiBold" AutomationProperties.Name="切换空间" />
+          <Button x:Name="SpaceSwitchButton" Grid.Column="1" Classes="quiet" Content="我的空间⌄" HorizontalContentAlignment="Left" FontSize="14" FontWeight="SemiBold" AutomationProperties.Name="切换空间" />
           <Button x:Name="NewButton" Grid.Column="2" Classes="quiet" Content="＋" FontSize="23" ToolTip.Tip="新建笔记 · Ctrl+N" AutomationProperties.Name="新建笔记" />
         </Grid>
-        <Border Grid.Row="1" Margin="16,0,16,10" Background="{DynamicResource ChromeF0F2F5}" CornerRadius="7" Padding="11,8">
+        <Border Grid.Row="1" Margin="16,0,16,14" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeE6E8ED}" BorderThickness="1" CornerRadius="8" Padding="11,9">
           <Grid ColumnDefinitions="23,*">
-            <TextBlock Text="⌕" FontSize="19" Foreground="{DynamicResource Chrome777670}" VerticalAlignment="Center" />
-            <TextBox x:Name="SearchBox" Grid.Column="1" Classes="clean" Watermark="搜索标题与正文" FontSize="12" AutomationProperties.Name="搜索笔记" />
+            <editing:SidebarGlyph Symbol="Search" Width="16" Height="16" VerticalAlignment="Center" />
+            <TextBox x:Name="SearchBox" Grid.Column="1" Classes="clean" Watermark="搜索标题与正文" FontSize="13" AutomationProperties.Name="搜索笔记" />
           </Grid>
         </Border>
-        <ScrollViewer Grid.Row="2" MaxHeight="260" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer Grid.Row="2" MaxHeight="300" HorizontalScrollBarVisibility="Disabled">
           <StackPanel x:Name="LibraryNavigation" Margin="12,0" Spacing="2" />
         </ScrollViewer>
         <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="23,12,23,7">
-          <TextBlock x:Name="ListHeading" Text="笔记" FontSize="11" Foreground="{DynamicResource Chrome8E8D87}" />
+          <TextBlock x:Name="ListHeading" Text="笔记" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Chrome8E8D87}" />
           <TextBlock x:Name="DocumentCount" Grid.Column="1" Foreground="{DynamicResource Chrome8B8B86}" FontSize="11" />
         </Grid>
         <ListBox x:Name="DocumentList" Grid.Row="4" Classes="documentList" AutomationProperties.Name="笔记列表">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="local:DocumentItem">
               <Grid ColumnDefinitions="25,*">
-                <TextBlock Text="▱" FontSize="18" Foreground="{DynamicResource Chrome96958E}" VerticalAlignment="Center" />
+                <editing:SidebarGlyph Symbol="Document" Width="17" Height="17" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1">
-                  <TextBlock Text="{Binding DisplayTitle}" TextTrimming="CharacterEllipsis" FontSize="12" />
+                  <TextBlock Text="{Binding DisplayTitle}" TextTrimming="CharacterEllipsis" FontSize="13" />
                   <TextBlock Text="{Binding Preview}" IsVisible="{Binding HasPreview}" Foreground="{DynamicResource Chrome7B7D82}" TextTrimming="CharacterEllipsis" FontSize="11" Margin="0,4,0,0" />
-                  <TextBlock Text="{Binding DateLabel}" Foreground="{DynamicResource Chrome9B9A95}" FontSize="10" Margin="0,4,0,0" />
+                  <TextBlock Text="{Binding DateLabel}" Foreground="{DynamicResource Chrome9B9A95}" FontSize="11" Margin="0,5,0,0" />
                 </StackPanel>
               </Grid>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-        <Grid Grid.Row="5" ColumnDefinitions="*,Auto" Margin="22,16">
+        <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" Margin="22,16">
           <TextBlock Text="●  已存储在此设备" Foreground="{DynamicResource Chrome898982}" FontSize="11" VerticalAlignment="Center" />
-          <Button x:Name="LibraryButton" Grid.Column="1" Classes="quiet" Content="⋯" ToolTip.Tip="笔记与数据" AutomationProperties.Name="笔记与数据菜单" />
+          <Button x:Name="TrashButton" Grid.Column="1" Classes="quiet" ToolTip.Tip="回收站" AutomationProperties.Name="回收站" AutomationProperties.AutomationId="LibraryTrash"><editing:SidebarGlyph Symbol="Trash" Width="17" Height="17" /></Button>
+          <Button x:Name="LibraryButton" Grid.Column="2" Classes="quiet" Content="⋯" ToolTip.Tip="笔记与数据" AutomationProperties.Name="笔记与数据菜单" />
         </Grid>
       </Grid>
         </Grid>
@@ -72,21 +74,28 @@
       </Grid>
     </Border>
     <Grid x:Name="DocumentRegion" Grid.Column="1" Grid.Row="1" RowDefinitions="Auto,*,30">
-      <Border x:Name="PageBackground" Grid.RowSpan="3" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeE9EBEF}" BorderThickness="1" CornerRadius="24" Margin="6,0,8,8" />
-      <Grid x:Name="TitleRegion" MaxWidth="860" HorizontalAlignment="Stretch" Margin="24,64,80,7">
+      <Border x:Name="PageBackground" Grid.RowSpan="3" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeE9EBEF}" BorderThickness="1" CornerRadius="16" Margin="6,0,12,12" />
+      <Grid x:Name="TitleRegion" MaxWidth="900" HorizontalAlignment="Stretch" Margin="32,58,88,8">
         <StackPanel Margin="48,0,8,0">
           <Border x:Name="CoverFrame" IsVisible="False" Height="170" Margin="0,-35,0,22" CornerRadius="14" ClipToBounds="True" Background="{DynamicResource ChromeF0F2F5}">
             <Image x:Name="CoverImage" Stretch="UniformToFill" />
           </Border>
-          <TextBox x:Name="TitleBox" Classes="clean" FontSize="23" FontWeight="Bold" MinHeight="0" Watermark="无标题" AutomationProperties.Name="笔记标题" />
-          <local:PageDivider x:Name="PageTitleDivider" Height="1" Margin="0,14,0,0" />
+          <TextBox x:Name="TitleBox" Classes="clean" FontSize="32" FontWeight="SemiBold" MinHeight="0" Watermark="无标题" TextWrapping="Wrap" AutomationProperties.Name="笔记标题" />
+          <local:PageDivider x:Name="PageTitleDivider" Height="1" Margin="0,20,0,0" />
         </StackPanel>
       </Grid>
-      <Grid x:Name="EditorHost" Grid.Row="1" Margin="24,22,80,0" MaxWidth="860" />
+      <Grid x:Name="EditorHost" Grid.Row="1" Margin="32,24,88,0" MaxWidth="900" />
       <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="23,0,26,0">
         <TextBlock x:Name="StatusLabel" FontSize="10" Foreground="{DynamicResource Chrome96968E}" VerticalAlignment="Center" Text="已保存到本机" TextTrimming="CharacterEllipsis" />
         <TextBlock x:Name="WordCount" Grid.Column="1" FontSize="10" Foreground="{DynamicResource ChromeACACA4}" VerticalAlignment="Center" />
       </Grid>
     </Grid>
+    <Border x:Name="TrashUndoNotice" Grid.Row="1" Grid.Column="1" IsVisible="False" ZIndex="30" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="18,0,18,48" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeD5DFEE}" BorderThickness="1" CornerRadius="10" Padding="16,10">
+      <StackPanel Orientation="Horizontal" Spacing="14">
+        <TextBlock Text="文档已移至回收站" FontSize="13" VerticalAlignment="Center" />
+        <Button x:Name="UndoTrashButton" Classes="quiet" Content="撤销删除" Foreground="{DynamicResource Chrome365E9D}" AutomationProperties.AutomationId="UndoTrash" />
+        <Button x:Name="DismissTrashNoticeButton" Classes="quiet" AutomationProperties.Name="关闭删除提示"><editing:SidebarGlyph Symbol="Close" Width="13" Height="13" /></Button>
+      </StackPanel>
+    </Border>
   </Grid>
 </Window>

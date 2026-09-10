@@ -14,6 +14,8 @@ public sealed record NoteNode(string Type)
     public ImmutableDictionary<string, JsonElement> Extra { get; init; } = ImmutableDictionary<string, JsonElement>.Empty;
 
     public bool IsTextBlock => Type is "paragraph" or "heading" or "codeBlock";
+    public bool IsContentContainer => Type is "doc" or "toggleBlock" or "blockquote" or "bulletList" or "orderedList" or "taskList" or "listItem" or "taskItem"
+        or "table" or "tableRow" or "tableCell" or "tableHeader" or "columnList" or "column";
     public bool Bool(string key) => Attrs.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.True;
     public string? String(string key) => Attrs.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     public int Int(string key, int fallback = 0) => Attrs.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) ? n : fallback;

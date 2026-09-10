@@ -22,7 +22,8 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 编辑表面 | AvaloniaEdit，文字排版/输入/选区/视口虚拟化 | `native/WriteMe.Desktop/Editing/` |
 | 选区格式 | 原生浮动工具栏、文字色/高亮、链接草稿、键盘导航 | `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` / `TextColorPicker.cs`，核心在 `native/WriteMe.Core/SelectionFormats.cs` / `TextColor.cs` |
 | 左侧导航 | 空间/当前文档模式、标题目录、隐藏标题定位 | `native/WriteMe.Desktop/Editing/DocumentOutlinePane.cs`，布局与模式在 `MainWindow.axaml` / `.cs`，目录模型在 `native/WriteMe.Core/DocumentTools.cs` |
-| 右侧工具 | 插入/Aa/页面/信息四入口、双侧栏响应布局 | `native/WriteMe.Desktop/Editing/EditorSidebar.cs` / `SidebarGlyph.cs`，扩展面板在 `MainWindow.Appearance.cs` |
+| 右侧工具 | 纸张外的插入/格式/样式/信息横向标签、收起胶囊、双侧栏响应布局 | `native/WriteMe.Desktop/Editing/EditorSidebar.cs` / `SidebarGlyph.cs`，扩展面板在 `MainWindow.Appearance.cs` |
+| 表格与分栏 | 区域编辑、共享历史、行列/宽度/比例、TSV、对齐 | Core 的 `LayoutBlocks.cs` / `ScopedSessions.cs`，Desktop 的 `Editing/BlockEditor.Layouts.cs` / `NativeTableView*.cs` / `NativeColumnsView.cs` |
 | 知识关联 | Unicode 标签、稳定 noteLink、反向链接、收藏 | `native/WriteMe.Core/NoteReferences.cs` / `KnowledgeStore.cs`，UI 在 `Editing/ReferenceCompletion.cs` / `MainWindow.Library.cs` |
 | 资料库导航 | 空间、层级文件夹、最近、回收站、FTS5 中文搜索、卡片总览 | `native/WriteMe.Core/LibraryStore.cs`，UI 在 `MainWindow.Library.cs` / `MainWindow.Overview.cs` |
 | 页面与文件 | 外观/封面、主题、资产、每日笔记、本地版本、Markdown 与 ZIP | `native/WriteMe.Core/WorkspaceStore.cs` / `NoteMarkdown.cs` / `LibraryBackup.cs`，UI 在 `MainWindow.Appearance.cs` / `MainWindow.Files.cs` / `PresentationWindow.cs` |
@@ -31,7 +32,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 折叠排版 | 矢量三角、28px 标记列/缩进、长标题续行与选区坐标 | `native/WriteMe.Desktop/Editing/ToggleDisclosureButton.cs` / `BlockRendering.cs` / `BlockTextFormatter.cs` |
 | 文档核心 | 不可变文档树、TipTap JSON、可见投影、富文本、统一历史、结构移动 | `native/WriteMe.Core/` |
 | 本地存储 | Microsoft.Data.Sqlite，独立原生库及旧库在线备份导入 | `native/WriteMe.Core/NoteStore.cs` |
-| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 153 项，含真实 HTTP | `native/WriteMe.Tests/` |
+| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 180 项，含真实 HTTP | `native/WriteMe.Tests/` |
 | 发布 | 自带 .NET 运行时的 Windows 目录；最近成功版本清单 | `scripts/Publish-Native.ps1` / `Start-Native.ps1` → `artifacts/native/` |
 
 ### 保留的 Web / Tauri 基线
@@ -107,13 +108,15 @@ npm run init-board          # 生成决策看板 board.html
 - `documents(id, title, content, created_at, updated_at)`，WAL；两版 `content` 均使用 **TipTap 块 JSON 字符串**。原生 `NoteJson` 兼容旧纯文本、旧空折叠标题、marks 与未知节点；Web 由 `src/editor/doc.ts#parseContent` 迁移。两个资料库后续修改独立，不做双向同步。
 - 新增块类型/序列化改动同步原生 `NoteJson`、`DocumentProjection`、相关回归与原生决策笔记；涉及 Web 时同步 `src/editor/doc.ts` 与 [M1 决策笔记](.agents/notes/implemented/feature/2026-09-08-m1-tiptap-block-editor.md)。保持旧 `src/lib/api.ts` 契约。
 - 原生文字、格式、折叠、拖动都经过 `DocumentSession`，共用 200 项有界历史；不要另开 UI 撤销栈。原生 650ms 自动保存在后台串行完成，切换和关闭必须等待保存。相同标题与正规化正文的保存必须无操作；Avalonia 标题变更事件会延后触发，不能只用 `_loading` 阻止远端显示刷新置脏。
+- 表格/分栏使用 TipTap 复合节点，单元格与栏通过 `CreateScope` 提交到根会话；历史记录事务前后选区，重做不能从后续导航位置推断光标。父表面通过 `LayoutHost` 定位内部节点，父键盘处理不能截获子区域事件。范围选择期间焦点留在父 TextArea 以保留 IME；提交文字先结束预编辑，再执行范围替换。
+- 复合块缓存控件必须同步字体、行距、底色、文字色、分割线、主题和关联目录，不能只在创建时复制设置。`PrefixInset/TextStart` 统一紧凑区域的续行、层级线、命中和拖放。表格最多 100×12，合并单元格保留但不可编辑；列宽用标准 `colwidth: [px]`，拖动只在松手时提交，轻点/Esc/捕获丢失不落盘。完整规则见 [原生表格与分栏](.agents/notes/implemented/feature/2026-09-11-native-tables-columns-and-editing.md)。
 - 链接/高亮显式应用调用 `Format(..., toggle: false)`，普通格式按钮使用开关语义。浮层草稿必须核对会话、修订号与选区；核心规则见 [格式工具栏](.agents/notes/implemented/feature/2026-09-09-text-formatting-toolbar.md)。
 - 文字颜色通过 `SetTextColor` 写入标准 `textStyle.color`，接受 3/6 位十六进制，null 恢复默认且保留其他样式属性；重复同色不增加历史。浮层和右栏共用 `TextColorPicker`，右栏按会话、Revision 与选区缓存，不能每次焦点刷新都重建并丢掉草稿；Enter/Escape 必须保护 TextPresenter 预编辑。
 - 待办/列表段首 Backspace 解除当前项包装并保留文字及子树；空项 Backspace/Delete/普通 Enter 回正文。复用 `ConvertBlock` 的拆分和编号规则，块菜单“删除此块”删除整项，均走统一历史。列表与待办预留 28px 标记列，复选框 24px 点击区不能和悬停手柄重叠；旧块菜单回调核对会话及文档树。
 - 原生新建折叠项显式 `collapsed: true`；空标题 Enter 也进入子项，父级展开、子级收起；Shift+Tab 退出层级。旧 JSON 状态不统一改写。箭头由 `BlockRow.IsExpanded` 决定，祖先线由 `GuideDepths` 单处绘制；不要退回按普通 Depth 为所有缩进画线。
 - 左侧目录只收录 `heading`，普通折叠标题不入目录；收起祖先内部真正的标题仍可定位，层次按标题等级组织。点击或 Enter 才跳转，打开/聚焦目录不自动展开折叠。底部切换空间/文档模式，`Ctrl+Alt+3` 打开左侧目录；右侧提供插入/Aa/页面/信息，`Ctrl+Alt+1/2` 打开插入/格式，全文展开/收起放文档菜单。中央卡片是资料库总览，不能混同于正文嵌套页面块。
 - 右侧插入使用 `InsertBlock`，不替换文字选区；样式使用 `ConvertBlock`，相同样式不清除任务勾选。有序列表拆分保留后续编号；面板、导航与历史规则见 [编辑导航](.agents/notes/implemented/feature/2026-09-09-editor-sidebar.md)。
-- 标签/双链索引和 FTS5 搜索从完整文档树派生，保存正文与重建本篇索引同事务，来源使用块路径/局部偏移，不持久化运行期节点 GUID。`noteLink.documentId` 稳定绑定目标，改名保留别名，回收站来源不计为有效反链。见 [M3 关联](.agents/notes/implemented/feature/2026-09-09-m3-note-connections.md)。
+- 标签/双链索引和 FTS5 搜索从完整文档树派生，包含表格和分栏；两个索引版本均为 2。保存正文与重建本篇索引同事务，来源使用块路径/局部偏移，不持久化运行期节点 GUID。`noteLink.documentId` 稳定绑定目标，改名保留别名，回收站来源不计为有效反链。见 [M3 关联](.agents/notes/implemented/feature/2026-09-09-m3-note-connections.md)。
 - 空间/文件夹/位置独立于标题，容器删除保留正文；最近按打开时间排序。中文 ≥3 字符走 FTS5 trigram，短词回退参数化子串；同一当前文档的搜索结果也必须定位。卡片每批 40 张，查询尚未分页；见 [资料库与搜索](.agents/notes/implemented/feature/2026-09-10-library-and-search.md)。
 - 页面外观与正文 marks 分开，主题/幽灵块偏好只在本机。正文标记颜色跟随实际页面底色；修改 XAML DynamicResource 时同步 `Ui.MarkupColors.cs`。SHA-256 资产不可变，单文件 50 MiB；删除引用/撤销不清物理文件，封面也必须纳入备份/同步。见 [M5 页面与可携带性](.agents/notes/implemented/feature/2026-09-10-page-assets-and-portability.md)。
 - ZIP 导入先验证清单/ID/循环/哈希，事务创建副本并重映射内部链接；不覆盖现有资料，不包含凭据、同步前沿和历史版本。Markdown 的相邻 `assets/` 导入需递归处理自定义块且校验哈希，不能读取越界、重解析点或远程 URL。

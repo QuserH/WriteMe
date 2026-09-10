@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
     private bool _sidebarVisible = true;
     private bool _documentNavigation = true;
     private string? _requestedDocument;
+    private string? _trashUndoId;
 
     public MainWindow() : this(Program.DataDirectory, Program.ImportLegacy) { }
 
@@ -76,9 +77,11 @@ public sealed partial class MainWindow : Window
         spaceMode.Content = new SidebarGlyph(SidebarSymbol.Folder, 20);
         documentMode.Content = new SidebarGlyph(SidebarSymbol.Document, 20);
         this.FindControl<Button>("SidebarButton")!.Content = new SidebarGlyph(SidebarSymbol.Sidebar, 18);
+        foreach (var (name, symbol) in new[] { ("UndoButton", SidebarSymbol.Undo), ("RedoButton", SidebarSymbol.Redo), ("MoreButton", SidebarSymbol.More), ("LibraryButton", SidebarSymbol.More), ("NewButton", SidebarSymbol.Plus) })
+            this.FindControl<Button>(name)!.Content = new SidebarGlyph(symbol, 18);
         spaceMode.Click += (_, _) => ShowNavigation(false);
         documentMode.Click += (_, _) => ShowNavigation(true);
-        _tools = new(_editor) { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new(0, 72, 22, 18) };
+        _tools = new(_editor) { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new(0, 36, 16, 14) };
         Grid.SetColumn(_tools, 1);
         Grid.SetRow(_tools, 1);
         _tools.ZIndex = 20;
@@ -115,6 +118,9 @@ public sealed partial class MainWindow : Window
         };
         this.FindControl<Button>("MoreButton")!.Click += (_, _) => OpenDocumentMenu();
         this.FindControl<Button>("LibraryButton")!.Click += (_, _) => OpenLibraryMenu();
+        this.FindControl<Button>("TrashButton")!.Click += (_, _) => SelectLibrary("trash");
+        this.FindControl<Button>("UndoTrashButton")!.Click += async (_, _) => await RunUiAsync(RestoreLastTrashedAsync);
+        this.FindControl<Button>("DismissTrashNoticeButton")!.Click += (_, _) => this.FindControl<Border>("TrashUndoNotice")!.IsVisible = false;
         InitializeLibraryNavigation();
         InitializeWorkspaceUi();
         InitializeOverview();
@@ -124,7 +130,7 @@ public sealed partial class MainWindow : Window
             if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
             if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key is Key.D1 or Key.D2 or Key.D3)
             {
-                if (_editor.InputClient.IsComposing) { e.Handled = true; return; }
+                if (_editor.IsAnyComposing) { e.Handled = true; return; }
                 if (e.Key == Key.D3) { ShowNavigation(true); _outline.FocusOutline(); }
                 else
                 {
@@ -176,11 +182,16 @@ public sealed partial class MainWindow : Window
         _documentPane.IsVisible = _documentNavigation;
         this.FindControl<Button>("SpaceModeButton")!.Classes.Set("active", !_documentNavigation);
         this.FindControl<Button>("DocumentModeButton")!.Classes.Set("active", _documentNavigation);
-        _tools.MaxHeight = Math.Max(160, Bounds.Height - 144);
-        var right = EditorSidebar.ToolWidth + 40 + (_tools.IsOpen ? EditorSidebar.PanelWidth + EditorSidebar.PanelGap : 0);
-        var left = Bounds.Width - (showLibrary ? 292 : 0) < 680 ? -24 : 24;
-        this.FindControl<Grid>("EditorHost")!.Margin = new(left, 22, right, 0);
-        this.FindControl<Grid>("TitleRegion")!.Margin = new(left, 64, right, 7);
+        _tools.Margin = new(0, _tools.IsOpen ? 4 : 36, 16, 14);
+        _tools.MaxHeight = Math.Max(160, Bounds.Height - 56 - _tools.Margin.Top - _tools.Margin.Bottom);
+        _tools.Height = _tools.IsOpen ? _tools.MaxHeight : double.NaN;
+        var reserved = (_tools.IsOpen ? EditorSidebar.PanelWidth : EditorSidebar.ToolWidth) + 32;
+        this.FindControl<Grid>("DocumentRegion")!.Margin = new(0, 0, reserved, 0);
+        var available = Bounds.Width - (showLibrary ? 292 : 0) - reserved;
+        var left = available < 680 ? -20 : 32;
+        var right = available < 680 ? 24 : 40;
+        this.FindControl<Grid>("EditorHost")!.Margin = new(left, 24, right, 0);
+        this.FindControl<Grid>("TitleRegion")!.Margin = new(left, 58, right, 8);
     }
 
     private void ShowNavigation(bool document)
@@ -343,7 +354,7 @@ public sealed partial class MainWindow : Window
     {
         var export = new MenuItem { Header = "导出笔记 JSON…" };
         export.Click += async (_, _) => await ExportAsync();
-        var delete = new MenuItem { Header = "删除笔记…" };
+        var delete = new MenuItem { Header = "移至回收站" };
         delete.Click += async (_, _) => await DeleteAsync();
         new ContextMenu
         {
@@ -392,13 +403,25 @@ public sealed partial class MainWindow : Window
 
     private async Task DeleteAsync()
     {
-        if (!await SaveAsync()) return;
-        _store.SetTrashed(_active.Id, true);
+        var id = _active.Id;
+        if (_switching || _syncApplying || ActiveHasConflict || !await SaveAsync() || _active.Id != id) return;
+        _store.SetTrashed(id, true);
+        _trashUndoId = id;
         if (_store.List().Count == 0) _store.Create();
         _libraryMode = "all"; _tagFilter = null; _folderId = null;
         ReloadDocuments();
         await SwitchAsync(_store.List()[0].Id);
-        _status.Text = "已移至回收站，可以从空间菜单恢复";
+        this.FindControl<Border>("TrashUndoNotice")!.IsVisible = true;
+        _status.Text = "已移至回收站";
+    }
+
+    private async Task RestoreLastTrashedAsync()
+    {
+        if (_trashUndoId is not { } id || _switching || _syncApplying || !await SaveAsync()) return;
+        _store.SetTrashed(id, false);
+        var location = _store.Location(id); _spaceId = location.SpaceId; _folderId = location.FolderId; _tagFilter = null; _libraryMode = "all";
+        _trashUndoId = null; this.FindControl<Border>("TrashUndoNotice")!.IsVisible = false;
+        ShowDocumentView(); ReloadDocuments(); await SwitchAsync(id); _status.Text = "已恢复文档"; _editor.FocusText();
     }
 
 }

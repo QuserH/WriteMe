@@ -32,12 +32,15 @@ public sealed record BlockCommand(string Name, string Kind, string Icon, string 
         new("待办事项", "taskList", "☐", "todo task daiban"),
         new("引用", "blockquote", "❞", "quote yinyong"),
         new("代码块", "codeBlock", "</>", "code daima"),
-        new("分割线", "horizontalRule", "—", "divider rule fengexian")
+        new("分割线", "horizontalRule", "—", "divider rule fengexian"),
+        new("表格", "table", "▦", "table grid biaoge"),
+        new("两栏布局", "columnList", "Ⅱ", "columns layout fenlan lianglan", 2),
+        new("三栏布局", "columnList", "Ⅲ", "columns layout fenlan sanlan", 3)
     ];
     public static BlockCommand[] Search(string query) => All.Where(c => (c.Name + " " + c.Aliases).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
 }
 
-public sealed class BlockEditor : UserControl
+public sealed partial class BlockEditor : UserControl
 {
     public TextEditor Surface { get; } = new();
     public DocumentSession Session { get; private set; }
@@ -54,9 +57,15 @@ public sealed class BlockEditor : UserControl
     private readonly TextBlock _ghostText = new() { TextWrapping = TextWrapping.Wrap, MaxLines = 3, FontSize = 13, Foreground = Ui.Ink };
     private readonly Border _ghost = new() { IsVisible = false, IsHitTestVisible = false, Background = Ui.Surface, BorderBrush = Ui.Line, BorderThickness = new(1), CornerRadius = new(9), Padding = new(14, 10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, ZIndex = 60 };
     // Note: 设置滑块即时控制实际指针预览，偏好只留本机 — 见 .agents/notes/implemented/feature/2026-09-09-settings-ghost-opacity.md
-    public double GhostOpacity { get => _ghost.Opacity; set => _ghost.Opacity = Math.Clamp(value, .4, 1); }
-    public Color? PageBackgroundColor { get; set; }
-    public string DividerStyle { get; set; } = "line";
+    public double GhostOpacity
+    {
+        get => _ghost.Opacity;
+        set { var opacity = Math.Clamp(value, .4, 1); if (_ghost.Opacity == opacity) return; _ghost.Opacity = opacity; QueuePageAppearance(); }
+    }
+    private Color? _pageBackgroundColor;
+    private string _dividerStyle = "line";
+    public Color? PageBackgroundColor { get => _pageBackgroundColor; set { if (_pageBackgroundColor == value) return; _pageBackgroundColor = value; QueuePageAppearance(); } }
+    public string DividerStyle { get => _dividerStyle; set { if (_dividerStyle == value) return; _dividerStyle = value; QueuePageAppearance(); } }
     internal bool IsDarkPage
     {
         get { var color = PageBackgroundColor ?? Ui.Surface.Color; return color.R * .299 + color.G * .587 + color.B * .114 < 140; }
@@ -91,9 +100,10 @@ public sealed class BlockEditor : UserControl
     private int _queryStart;
     private int _queryLength;
 
-    public BlockEditor(DocumentSession session)
+    public BlockEditor(DocumentSession session, bool compact = false)
     {
         Session = session;
+        IsCompact = compact;
         AutomationProperties.SetName(Surface, "笔记正文");
         AutomationProperties.SetName(Surface.TextArea, "笔记正文");
         Surface.Background = Brushes.Transparent;
@@ -111,7 +121,7 @@ public sealed class BlockEditor : UserControl
         // A plaintext drag would bypass the block tree and lose the toggle wrapper.
         // All block movement goes through the captured handle + DocumentSession.Move transaction.
         Surface.Options.EnableTextDragDrop = false;
-        Surface.Options.AllowScrollBelowDocument = true;
+        Surface.Options.AllowScrollBelowDocument = !compact;
         Surface.Options.EnableVirtualSpace = false;
         Surface.Options.HighlightCurrentLine = false;
         Surface.TemplateApplied += (_, e) => _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
@@ -124,7 +134,15 @@ public sealed class BlockEditor : UserControl
         Surface.TextArea.ReadOnlySectionProvider = new AtomicReadOnlyProvider(this);
         Surface.TextArea.TextView.ElementGenerators.Insert(0, new BlockPrefixGenerator(this));
         Surface.TextArea.TextView.ElementGenerators.Insert(1, new AssetElementGenerator(this));
-        BlockTextFormatter.Attach(Surface.TextArea.TextView);
+        Surface.TextArea.TextView.ElementGenerators.Insert(2, new LayoutElementGenerator(this));
+        Surface.TextArea.TextView.SizeChanged += (_, _) => QueueLayoutWidths();
+        PropertyChanged += (_, e) => { if (e.Property == ThemeVariantScope.ActualThemeVariantProperty) QueuePageAppearance(); };
+        Surface.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextEditor.FontSizeProperty || e.Property == TextEditor.FontFamilyProperty || e.Property == TextEditor.ForegroundProperty) QueuePageAppearance();
+        };
+        Surface.Options.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Surface.Options.LineHeightFactor)) QueuePageAppearance(); };
+        BlockTextFormatter.Attach(Surface.TextArea.TextView, this);
         Surface.TextArea.TextView.LineTransformers.Add(new BlockStyleTransformer(this));
         Surface.TextArea.TextView.BackgroundRenderers.Add(new BlockBackgroundRenderer(this));
         _layout.Children.Add(Surface);
@@ -163,8 +181,10 @@ public sealed class BlockEditor : UserControl
         _ghost.Child = _ghostText; _ghost.Opacity = .85;
         _ghost.BoxShadow = new(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.Parse("#30000000") });
         AutomationProperties.SetAutomationId(_ghost, "DragGhost"); _layout.Children.Add(_ghost);
-        Surface.TextArea.AddHandler(InputElement.TextInputMethodClientRequestedEvent, (_, e) => { e.Client = InputClient; e.Handled = true; }, RoutingStrategies.Bubble, handledEventsToo: true);
+        Surface.TextArea.AddHandler(InputElement.TextInputMethodClientRequestedEvent, (_, e) => { if (!OwnsInput(e.Source)) return; e.Client = InputClient; e.Handled = true; }, RoutingStrategies.Bubble, handledEventsToo: true);
         InputClient.PreeditChanged += (_, _) => UpdatePreedit();
+        Surface.TextArea.GotFocus += (_, e) => { if (OwnsInput(e.Source)) Activate(); };
+        Surface.AddHandler(TextInputEvent, HandleAtomicText, RoutingStrategies.Tunnel);
         Surface.TextArea.TextEntered += (_, _) => { InputClient.SetPreeditText(null); UpdateCommands(); };
         Surface.Document.Changed += DocumentChanged;
         Surface.TextArea.SelectionChanged += (_, _) => ObserveSelection();
@@ -172,8 +192,11 @@ public sealed class BlockEditor : UserControl
         Surface.AddHandler(KeyDownEvent, HandleKey, RoutingStrategies.Tunnel);
         Surface.AddHandler(PointerPressedEvent, (_, e) =>
         {
+            if (!OwnsInput(e.Source)) return;
+            foreach (var table in _layouts.Values.OfType<NativeTableView>()) table.ClearRangeSelection();
+            Activate();
             if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.GetCurrentPoint(Surface).Properties.IsLeftButtonPressed
-                && e.GetPosition(Surface.TextArea.TextView).X >= BlockLayout.TextStart(Session.Projection.At(Surface.CaretOffset))
+                && e.GetPosition(Surface.TextArea.TextView).X >= TextStart(Session.Projection.At(Surface.CaretOffset))
                 && Surface.GetPositionFromPoint(e.GetPosition(Surface)) is { } position
                 && ActivateReference(Surface.Document.GetOffset(position.Line, position.Column)))
             { e.Handled = true; return; }
@@ -186,6 +209,7 @@ public sealed class BlockEditor : UserControl
         Surface.AddHandler(PointerMovedEvent, DragMoved, RoutingStrategies.Tunnel);
         Surface.AddHandler(PointerReleasedEvent, (sender, e) =>
         {
+            if (!OwnsInput(e.Source) && _dragSource == null) return;
             DragReleased(sender, e);
             _pointerSelecting = false;
             Formatting.QueueRefresh();
@@ -202,6 +226,7 @@ public sealed class BlockEditor : UserControl
 
     public void Load(DocumentSession session)
     {
+        ClearLayouts();
         ClearAssetCache();
         References.Reset();
         Formatting.Reset();
@@ -216,7 +241,12 @@ public sealed class BlockEditor : UserControl
         Surface.ScrollToHome();
     }
 
-    public void FocusText() => Surface.TextArea.Focus();
+    public void FocusText()
+    {
+        if (TryFocusLayoutSelection()) return;
+        Activate();
+        Surface.TextArea.Focus();
+    }
     internal void OpenAsset(NoteNode node) => AssetInvoked?.Invoke(node);
     internal Bitmap? AssetImage(string id)
     {
@@ -239,6 +269,7 @@ public sealed class BlockEditor : UserControl
     {
         ReferenceDocuments = documents; ReferenceTags = tags;
         _referenceIds = documents.Select(document => document.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var layout in _layouts.Values) layout.UpdateCatalogue(documents, tags);
         Surface.TextArea.TextView.Redraw();
     }
     internal bool IsKnownReference(string id) => _referenceIds == null || _referenceIds.Contains(id);
@@ -290,6 +321,7 @@ public sealed class BlockEditor : UserControl
 
     public void SyncSurface()
     {
+        RefreshLayouts();
         _syncing = true;
         try
         {
@@ -316,6 +348,7 @@ public sealed class BlockEditor : UserControl
     private void ObserveSelection()
     {
         if (_syncing || _editing || _queuedSync || Surface.Document.TextLength != Session.Projection.Text.Length) return;
+        if (_activeChild != null && !Surface.TextArea.IsFocused) return;
         var start = Surface.SelectionStart;
         var end = start + Surface.SelectionLength;
         Session.Selection = Surface.CaretOffset == start ? Session.Projection.Selection(end, start) : Session.Projection.Selection(start, end);
@@ -325,6 +358,7 @@ public sealed class BlockEditor : UserControl
 
     private void HandleKey(object? sender, KeyEventArgs e)
     {
+        if (!OwnsInput(e.Source)) return;
         if (InputClient.IsComposing)
         {
             // Returning alone lets AvaloniaEdit's default Enter/Tab/Delete handler edit the document.
@@ -333,6 +367,7 @@ public sealed class BlockEditor : UserControl
                 e.Handled = true;
             return;
         }
+        if (HandleLayoutKey(e)) return;
         var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         if (References.HandleKey(e)) return;
@@ -354,8 +389,8 @@ public sealed class BlockEditor : UserControl
         }
         if (control)
         {
-            if (e.Key == Key.Z) { if (shift) Session.Redo(); else Session.Undo(); e.Handled = true; return; }
-            if (e.Key == Key.Y) { Session.Redo(); e.Handled = true; return; }
+            if (e.Key == Key.Z) { if (shift) Session.Redo(); else Session.Undo(); FocusHistorySelection(); e.Handled = true; return; }
+            if (e.Key == Key.Y) { Session.Redo(); FocusHistorySelection(); e.Handled = true; return; }
             if (e.Key == Key.B) { ApplyFormat(new("bold")); e.Handled = true; return; }
             if (e.Key == Key.I) { ApplyFormat(new("italic")); e.Handled = true; return; }
             if (e.Key == Key.U) { ApplyFormat(new("underline")); e.Handled = true; return; }
@@ -365,7 +400,8 @@ public sealed class BlockEditor : UserControl
         }
         if (e.Key == Key.Enter)
         {
-            Session.ReplaceSelectionWithEnter(Surface.SelectionStart, Surface.SelectionLength, control, shift);
+            try { Session.ReplaceSelectionWithEnter(Surface.SelectionStart, Surface.SelectionLength, control, shift); }
+            catch (InvalidOperationException ex) { ShowNotice(ex.Message); }
             Surface.ScrollTo(Surface.TextArea.Caret.Line, Surface.TextArea.Caret.Column);
             e.Handled = true;
             return;
@@ -379,7 +415,7 @@ public sealed class BlockEditor : UserControl
         }
         if (e.Key == Key.Back && Surface.SelectionLength == 0 && !control)
         {
-            if (Session.BackspaceAtStart(Surface.CaretOffset)) { e.Handled = true; return; }
+            if (Session.BackspaceAtStart(Surface.CaretOffset)) { SyncSurface(); e.Handled = true; return; }
         }
         if (e.Key == Key.Delete && Surface.SelectionLength == 0 && !control && Session.ExitEmptyList(Surface.CaretOffset))
         {
@@ -459,7 +495,8 @@ public sealed class BlockEditor : UserControl
     {
         if (!_commands.IsVisible || _commandList.SelectedItem is not BlockCommand command) return;
         DismissCommands();
-        Session.ConvertBlock(_queryStart + _queryLength, command.Kind, command.Level, _queryLength);
+        if (command.Kind is "table" or "columnList") Session.InsertLayoutCommand(_queryStart + _queryLength, _queryLength, command.Kind, command.Level);
+        else Session.ConvertBlock(_queryStart + _queryLength, command.Kind, command.Level, _queryLength);
         FocusText();
     }
 
@@ -477,6 +514,7 @@ public sealed class BlockEditor : UserControl
 
     private void DragMoved(object? sender, PointerEventArgs e)
     {
+        if (!OwnsInput(e.Source) && _dragSource == null) return;
         if (_dragSource == null) { UpdateHover(e.GetPosition(Surface.TextArea.TextView)); return; }
         _dragPointer = e.GetPosition(Surface.TextArea.TextView);
         if (!_dragging && Math.Sqrt(Math.Pow(_dragPointer.X - _dragStart.X, 2) + Math.Pow(_dragPointer.Y - _dragStart.Y, 2)) < 5) return;
@@ -544,7 +582,7 @@ public sealed class BlockEditor : UserControl
         var row = Session.Projection.At(line.FirstDocumentLine.Offset);
         var relative = (y - line.VisualTop) / line.Height;
         var placement = relative < .25 ? DropPlacement.Before : relative > .75 ? DropPlacement.After : row.IsToggle ? DropPlacement.Inside : DropPlacement.After;
-        while (row.Depth > 0 && _dragPointer.X < BlockLayout.TextInset - 16 + row.Depth * BlockLayout.Indent)
+        while (row.Depth > 0 && _dragPointer.X < BlockLayout.TextInset - 16 + row.Depth * BlockLayout.Indent - PrefixInset(row))
         {
             var parent = NoteTree.Parent(Session.Root, row.Block.Id);
             if (parent?.Type != "toggleBlock") break;
@@ -610,18 +648,23 @@ public sealed class BlockEditor : UserControl
             };
             return item;
         }
-        var menu = new ContextMenu
+        var items = new List<Control>();
+        if (!row.IsAtomic)
         {
-            ItemsSource = new Control[]
-            {
-                Item(row.IsToggle ? "取消折叠，保留内容" : "转换为折叠块", () => Session.ConvertBlock(row.Start, row.IsToggle ? "paragraph" : "toggleBlock")),
-                Item("增加一级缩进", () => Session.Indent(id)),
-                Item("减少一级缩进", () => Session.Outdent(id)),
-                new Separator(),
-                Item("复制此块", () => Session.DuplicateBlock(id)),
-                Item("删除此块", () => Session.DeleteBlock(id))
-            }
-        };
+            items.Add(Item(row.IsToggle ? "取消折叠，保留内容" : "转换为折叠块", () => Session.ConvertBlock(row.Start, row.IsToggle ? "paragraph" : "toggleBlock")));
+            items.Add(Item("增加一级缩进", () => Session.Indent(id)));
+            items.Add(Item("减少一级缩进", () => Session.Outdent(id)));
+        }
+        else if ((LayoutBlocks.IsEditableTable(row.Node) || LayoutBlocks.IsEditableColumns(row.Node))
+                 && NoteTree.Descendants(row.Node).FirstOrDefault(node => node.IsTextBlock) is { } first)
+        {
+            items.Add(Item(row.Node.Type == "table" ? "编辑表格" : "编辑分栏", () => NavigateTo(first.Id)));
+            if (row.Node.Type == "columnList") items.Add(Item("取消分栏，保留全部内容", () => Session.UnwrapColumns(id)));
+        }
+        if (items.Count > 0) items.Add(new Separator());
+        items.Add(Item("创建块副本", () => Session.DuplicateBlock(id)));
+        items.Add(Item("删除此块", () => Session.DeleteBlock(id)));
+        var menu = new ContextMenu { ItemsSource = items };
         Surface.ContextMenu?.Close();
         Surface.ContextMenu = menu;
         menu.Closed += (_, _) => { if (ReferenceEquals(Surface.ContextMenu, menu)) Surface.ContextMenu = null; };

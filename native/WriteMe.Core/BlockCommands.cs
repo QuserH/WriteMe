@@ -48,7 +48,7 @@ public sealed partial class DocumentSession
         if (row.Depth > 0 && Outdent(row.Block.Id)) return true;
         if (row.Index == 0) return true;
         var previous = Projection.Rows[row.Index - 1];
-        if (previous.IsAtomic) return true;
+        if (previous.IsAtomic) { Selection = Projection.Selection(previous.Start, previous.End); return true; }
         if (previous.Collapsed) { Toggle(previous.Block.Id); return true; }
         Edit(previous.End, row.Start - previous.End, "", false);
         return true;

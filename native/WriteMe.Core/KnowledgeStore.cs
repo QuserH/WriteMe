@@ -32,14 +32,14 @@ public sealed partial class NoteStore
             """;
         command.ExecuteNonQuery();
         command.CommandText = "SELECT value FROM library_state WHERE key='reference_index_version'";
-        if (!Equals(command.ExecuteScalar(), "1"))
+        if (!Equals(command.ExecuteScalar(), "2"))
         {
             command.CommandText = "SELECT id,content FROM documents";
             var documents = new List<(string Id, string Content)>();
             using (var reader = command.ExecuteReader())
                 while (reader.Read()) documents.Add((reader.GetString(0), reader.GetString(1)));
             foreach (var document in documents) ReplaceReferences(document.Id, NoteReferences.Read(NoteJson.Parse(document.Content)), transaction);
-            command.CommandText = "INSERT INTO library_state(key,value) VALUES('reference_index_version','1') ON CONFLICT(key) DO UPDATE SET value=excluded.value";
+            command.CommandText = "INSERT INTO library_state(key,value) VALUES('reference_index_version','2') ON CONFLICT(key) DO UPDATE SET value=excluded.value";
             command.ExecuteNonQuery();
         }
         transaction.Commit();

@@ -20,6 +20,7 @@ internal sealed class TextColorPicker : StackPanel
     public TextColorPicker(SelectionFormats? formats, Action<string?> apply, Action cancel, string idPrefix)
     {
         Spacing = 8;
+        Classes.Add("textColorPicker");
         var current = formats?.UniformTextColor;
         Children.Add(new TextBlock
         {
@@ -53,6 +54,7 @@ internal sealed class TextColorPicker : StackPanel
         Children.Add(palette);
         var custom = new Grid { ColumnDefinitions = new("*,Auto"), ColumnSpacing = 7 };
         _input = new TextBox { Text = current ?? "", Watermark = "自定义色，如 #426BB3", MinHeight = 30, FontSize = 11, VerticalContentAlignment = VerticalAlignment.Center };
+        _input.Classes.Add("colorInput");
         AutomationProperties.SetName(_input, "自定义文字颜色");
         AutomationProperties.SetAutomationId(_input, idPrefix + "TextColorHex");
         var error = new TextBlock { Text = "请输入 3 位或 6 位十六进制颜色", FontSize = 11, Foreground = Ui.Chrome("#B65355"), TextWrapping = TextWrapping.Wrap, IsVisible = false };

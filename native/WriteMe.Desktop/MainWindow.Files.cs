@@ -20,8 +20,9 @@ public sealed partial class MainWindow
     }
     private async Task InsertAssetsAsync(bool images)
     {
-        if (_editor.InputClient.IsComposing || _switching) return;
-        var session = _editor.Session; var revision = session.Revision; var offset = _editor.Surface.CaretOffset;
+        if (_editor.IsAnyComposing || _switching) return;
+        var editor = _editor.ActiveEditor;
+        var session = editor.Session; var revision = session.Revision; var offset = editor.Surface.CaretOffset;
         var files = await StorageProvider.OpenFilePickerAsync(new()
         {
             Title = images ? "插入图片" : "插入附件", AllowMultiple = true,
@@ -31,8 +32,8 @@ public sealed partial class MainWindow
         {
             await using var stream = await file.OpenReadAsync();
             var asset = await Task.Run(() => _store.ImportAsset(stream, file.Name));
-            if (!ReferenceEquals(session, _editor.Session) || session.Revision != revision) { _status.Text = "编辑位置已改变，请重新选择附件插入位置"; return; }
-            session.InsertAsset(offset, asset, images); revision = session.Revision; offset = _editor.Surface.CaretOffset;
+            if (!ReferenceEquals(editor, _editor.ActiveEditor) || !session.IsScopeAttached || session.Revision != revision) { _status.Text = "编辑位置已改变，请重新选择附件插入位置"; return; }
+            session.InsertAsset(offset, asset, images); revision = session.Revision; offset = editor.Surface.CaretOffset;
         }
         _editor.FocusText();
     }

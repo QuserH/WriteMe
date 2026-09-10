@@ -88,7 +88,7 @@ public static class NoteReferences
                 }
                 return;
             }
-            if (node.Type is not ("doc" or "toggleBlock" or "blockquote" or "bulletList" or "orderedList" or "taskList" or "listItem" or "taskItem")) return;
+            if (!node.IsContentContainer) return;
             for (var i = 0; i < node.Content.Length; i++) Walk(node.Content[i], path.Length == 0 ? i.ToString() : path + "/" + i);
         }
         Walk(root, "");

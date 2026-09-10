@@ -19,7 +19,7 @@ public static class DocumentText
         {
             if (node.IsTextBlock) { blocks.Add(new(path, RichText.Plain(node).Replace('\u2028', '\n'))); return; }
             if (node.Type is "image" or "attachment") { blocks.Add(new(path, node.String("name") ?? node.String("alt") ?? "附件")); return; }
-            if (node.Type is not ("doc" or "toggleBlock" or "blockquote" or "bulletList" or "orderedList" or "taskList" or "listItem" or "taskItem")) return;
+            if (!node.IsContentContainer) return;
             for (var i = 0; i < node.Content.Length; i++) Walk(node.Content[i], path.Length == 0 ? i.ToString() : path + "/" + i);
         }
         Walk(root, "");
@@ -67,14 +67,14 @@ public sealed partial class NoteStore
             """;
         command.ExecuteNonQuery();
         command.CommandText = "SELECT value FROM library_state WHERE key='search_index_version'";
-        if (!Equals(command.ExecuteScalar(), "1"))
+        if (!Equals(command.ExecuteScalar(), "2"))
         {
             command.CommandText = "SELECT id,title,content FROM documents";
             var documents = new List<(string Id, string Title, string Content)>();
             using (var reader = command.ExecuteReader())
                 while (reader.Read()) documents.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
             foreach (var document in documents) ReplaceSearch(document.Id, document.Title, NoteJson.Parse(document.Content), transaction);
-            command.CommandText = "INSERT OR REPLACE INTO library_state(key,value) VALUES('search_index_version','1')";
+            command.CommandText = "INSERT OR REPLACE INTO library_state(key,value) VALUES('search_index_version','2')";
             command.ExecuteNonQuery();
         }
         transaction.Commit();

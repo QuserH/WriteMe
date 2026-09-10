@@ -24,6 +24,7 @@ public sealed class DocumentProjection
     public ImmutableArray<BlockRow> Rows { get; }
     public string Text { get; }
     private readonly Dictionary<Guid, BlockRow> _byNode;
+    private readonly Dictionary<Guid, BlockRow> _layoutHosts = [];
 
     public DocumentProjection(NoteNode root)
     {
@@ -32,7 +33,7 @@ public sealed class DocumentProjection
         void Add(NoteNode node, NoteNode owner, int depth, ImmutableArray<int> guides, string marker, bool quote)
         {
             if (rows.Count > 0) text.Append('\n');
-            var value = node.IsTextBlock ? RichText.Plain(node) : node.Type is "horizontalRule" or "image" or "attachment" ? "\uFFFC" : $"[保留的 {node.Type} 内容]";
+            var value = node.IsTextBlock ? RichText.Plain(node) : node.Type is "horizontalRule" or "image" or "attachment" or "table" or "columnList" ? "\uFFFC" : $"[保留的 {node.Type} 内容]";
             rows.Add(new(node, owner, depth, marker, quote) { Start = text.Length, Index = rows.Count, Text = value, GuideDepths = guides });
             text.Append(value);
         }
@@ -72,6 +73,8 @@ public sealed class DocumentProjection
         Rows = rows.ToImmutable();
         Text = text.ToString();
         _byNode = Rows.ToDictionary(row => row.Node.Id);
+        foreach (var row in Rows.Where(row => row.Node.Type is "table" or "columnList"))
+            foreach (var child in NoteTree.Descendants(row.Node).Skip(1)) _layoutHosts[child.Id] = row;
     }
 
     public BlockRow At(int offset)
@@ -88,11 +91,12 @@ public sealed class DocumentProjection
     }
 
     public BlockRow? Find(Guid nodeId) => _byNode.GetValueOrDefault(nodeId);
+    public BlockRow? LayoutHost(Guid nodeId) => _layoutHosts.GetValueOrDefault(nodeId);
     public TextPoint Point(int offset)
     {
         var row = At(offset);
         return new(row.Node.Id, Math.Clamp(offset - row.Start, 0, row.Text.Length));
     }
-    public int Offset(TextPoint point) => Find(point.NodeId) is { } row ? row.Start + Math.Clamp(point.Offset, 0, row.Text.Length) : 0;
+    public int Offset(TextPoint point) => Find(point.NodeId) is { } row ? row.Start + Math.Clamp(point.Offset, 0, row.Text.Length) : LayoutHost(point.NodeId)?.Start ?? 0;
     public EditorSelection Selection(int start, int end) => new(Point(start), Point(end));
 }

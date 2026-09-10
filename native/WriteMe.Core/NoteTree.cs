@@ -65,7 +65,7 @@ public static class NoteTree
             changed |= !ReferenceEquals(child, updated);
             children.Add(updated);
         }
-        if (children.Count == 0 && root.Type is "doc" or "toggleBlock" or "listItem" or "taskItem") { children.Add(NoteNode.Paragraph()); changed = true; }
+        if (children.Count == 0 && root.Type is "doc" or "toggleBlock" or "listItem" or "taskItem" or "tableCell" or "tableHeader" or "column") { children.Add(NoteNode.Paragraph()); changed = true; }
         if (root.Type is "toggleBlock" or "listItem" or "taskItem" && children[0].Type != "paragraph") { children.Insert(0, NoteNode.Paragraph()); changed = true; }
         return changed ? root with { Content = children.ToImmutable() } : root;
     }

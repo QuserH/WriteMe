@@ -3,6 +3,7 @@ using System.Text;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using Markdig.Extensions.Tables;
 using MarkdownTask = Markdig.Extensions.TaskLists.TaskList;
 
 namespace WriteMe.Core;
@@ -70,6 +71,27 @@ public static class NoteMarkdown
                 break;
             case ThematicBreakBlock:
                 yield return new("horizontalRule");
+                break;
+            case Table table:
+                var rows = new List<NoteNode>();
+                foreach (var row in table.OfType<TableRow>())
+                {
+                    var cells = new List<NoteNode>();
+                    foreach (var cell in row.OfType<TableCell>())
+                    {
+                        var content = cell.SelectMany(ConvertBlock).ToImmutableArray();
+                        if (content.IsEmpty) content = [NoteNode.Paragraph()];
+                        var columnIndex = cell.ColumnIndex >= 0 ? cell.ColumnIndex : cells.Sum(existing => existing.Int("colspan", 1));
+                        var alignment = columnIndex < table.ColumnDefinitions.Count ? table.ColumnDefinitions[columnIndex].Alignment?.ToString().ToLowerInvariant() : null;
+                        if (alignment is "center" or "right") content = content.Select(block => block.IsTextBlock ? block.WithAttr("textAlign", alignment) : block).ToImmutableArray();
+                        var converted = new NoteNode(row.IsHeader ? "tableHeader" : "tableCell") { Content = content };
+                        if (cell.ColumnSpan > 1) converted = converted.WithAttr("colspan", cell.ColumnSpan);
+                        if (cell.RowSpan > 1) converted = converted.WithAttr("rowspan", cell.RowSpan);
+                        cells.Add(converted);
+                    }
+                    rows.Add(new("tableRow") { Content = [.. cells] });
+                }
+                yield return new("table") { Content = [.. rows] };
                 break;
             case LeafBlock leaf:
                 yield return leaf.Inline != null ? new("paragraph") { Content = Inline(leaf.Inline) } : NoteNode.Paragraph(leaf.Lines.ToString());
@@ -177,6 +199,7 @@ public static class NoteMarkdown
                     var name = node.String("name") ?? node.String("alt") ?? "附件";
                     var source = node.String("assetId") is { } asset ? assetsPrefix + asset : node.String("src") ?? "";
                     return (node.Type == "image" ? "!" : "") + "[" + Escape(name) + "](" + source.Replace(" ", "%20").Replace(")", "%29") + ")";
+                case "table" when SimpleTable(node) is { } markdown: return markdown;
                 default:
                     // Custom blocks retain their exact structure in an explicit fenced payload.
                     var json = NoteJson.Serialize(new("doc") { Content = [node] });
@@ -185,5 +208,19 @@ public static class NoteMarkdown
             }
         }
         return Node(root).TrimEnd() + "\n";
+    }
+
+    private static string? SimpleTable(NoteNode table)
+    {
+        if (!LayoutBlocks.IsEditableTable(table) || !LayoutBlocks.HasHeader(table) || table.Attrs.Count > 0 || table.Extra.Count > 0) return null;
+        var cells = table.Content.SelectMany(row => row.Content).ToArray();
+        if (cells.Any(cell => cell.Attrs.Count > 0 || cell.Extra.Count > 0 || cell.Content.Length != 1 || cell.Content[0].Type != "paragraph"
+            || cell.Content[0].Attrs.Keys.Any(key => key != "textAlign") || cell.Content[0].Content.Any(run => run.Type != "text" || run.Text.Contains('\u2028') || run.Text.Contains('\n')
+                || run.Marks.Any(mark => mark.Type is not ("bold" or "italic" or "strike" or "link" or "noteLink" or "code"))))) return null;
+        var alignments = table.Content[0].Content.Select(cell => cell.Content[0].String("textAlign") ?? "left").ToArray();
+        if (table.Content.Skip(1).Any(row => row.Content.Where((cell, index) => (cell.Content[0].String("textAlign") ?? "left") != alignments[index] || cell.Type != "tableCell").Any())) return null;
+        var lines = table.Content.Select(row => "| " + string.Join(" | ", row.Content.Select(cell => Runs(cell.Content[0]).Replace("|", "\\|"))) + " |").ToList();
+        lines.Insert(1, "| " + string.Join(" | ", alignments.Select(alignment => alignment switch { "center" => ":---:", "right" => "---:", _ => "---" })) + " |");
+        return string.Join('\n', lines);
     }
 }

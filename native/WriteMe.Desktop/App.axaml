@@ -24,6 +24,10 @@
     <Style Selector="Button.quiet.active /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ChromeE9E8E5}" />
     </Style>
+    <Style Selector="Button.libraryNav.active /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome365E9D}" />
+    </Style>
     <Style Selector="Button.quiet:disabled /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
     </Style>
@@ -91,7 +95,7 @@
       <Setter Property="Margin" Value="0,2" />
     </Style>
     <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ChromeE9E8E5}" />
+      <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
       <Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="ListBoxItem:selected /template/ Rectangle#SelectionIndicator">

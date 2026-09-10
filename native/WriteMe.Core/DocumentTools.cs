@@ -20,7 +20,7 @@ public static class DocumentOutline
                 entries.Add(new(node.Id, Label(node, "未命名标题"), levels.Count, level));
                 levels.Push(level);
             }
-            else if (node.Type is "doc" or "toggleBlock" or "blockquote" or "bulletList" or "orderedList" or "taskList" or "listItem" or "taskItem")
+            else if (node.IsContentContainer)
                 foreach (var child in node.Content) Walk(child);
         }
         Walk(root);
@@ -46,6 +46,8 @@ public sealed partial class DocumentSession
 
     public bool InsertBlock(int offset, string kind, int level = 1)
     {
+        if (kind == "table") return InsertTable(offset);
+        if (kind == "columnList") return InsertColumns(offset, Math.Clamp(level, 2, 3));
         if (kind is not ("paragraph" or "heading" or "toggleBlock" or "bulletList" or "orderedList" or "taskList" or "blockquote" or "codeBlock" or "horizontalRule")) return false;
         var row = Projection.At(offset);
         if (row.Node.Id == row.Block.Id && row.Node.Type == "paragraph" && row.Text.Length == 0)

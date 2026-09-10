@@ -6,20 +6,39 @@ using Avalonia.Media;
 
 namespace WriteMe.Desktop.Editing;
 
-internal enum SidebarSymbol
+public enum SidebarSymbol
 {
     Plus, Format, Outline, Close, Search, Folder, Document, Sidebar, Text, Heading1, Heading2, Heading3,
     Toggle, BulletList, OrderedList, Task, Quote, Code, Divider,
-    Bold, Italic, Underline, Strike, Link, Clear, Indent, Outdent, Expand, Collapse, Check, NoColor, Paint, Info, Image, Attachment, Star, Clock
+    Bold, Italic, Underline, Strike, Link, Clear, Indent, Outdent, Expand, Collapse, Check, NoColor, Paint, Info, Image, Attachment, Star, Clock,
+    Table, Columns, AddRow, AddColumn, More, Unwrap, AlignLeft, AlignCenter, AlignRight, AlignJustify, Grid, Trash, Settings, Calendar, Tag, Undo, Redo
 }
 
 // Small vector controls keep icon weight and alignment independent of Unicode fallback fonts.
-internal sealed class SidebarGlyph : Control
+public sealed class SidebarGlyph : Control
 {
-    private readonly SidebarSymbol _symbol;
+    private SidebarSymbol _symbol;
+    public SidebarSymbol Symbol { get => _symbol; set { _symbol = value; InvalidateVisual(); } }
     private static readonly IReadOnlyDictionary<SidebarSymbol, Geometry> Paths = new Dictionary<SidebarSymbol, string>
     {
         [SidebarSymbol.Plus] = "M12 5 V19 M5 12 H19",
+        [SidebarSymbol.Table] = "M4 3 H20 Q21 3 21 4 V20 Q21 21 20 21 H4 Q3 21 3 20 V4 Q3 3 4 3 M3 9 H21 M3 15 H21 M9 3 V21 M15 3 V21",
+        [SidebarSymbol.Columns] = "M4 3 H20 Q21 3 21 4 V20 Q21 21 20 21 H4 Q3 21 3 20 V4 Q3 3 4 3 M12 3 V21",
+        [SidebarSymbol.AddRow] = "M3 3 H21 V13 H3 Z M3 8 H21 M12 16 V22 M9 19 H15",
+        [SidebarSymbol.AddColumn] = "M3 3 H13 V21 H3 Z M8 3 V21 M16 12 H22 M19 9 V15",
+        [SidebarSymbol.More] = "M4 12 H4.1 M12 12 H12.1 M20 12 H20.1",
+        [SidebarSymbol.Unwrap] = "M4 5 H20 M4 19 H20 M9 9 L6 12 L9 15 M15 9 L18 12 L15 15 M6 12 H18",
+        [SidebarSymbol.AlignLeft] = "M3 4 H21 M3 9 H15 M3 14 H21 M3 19 H15",
+        [SidebarSymbol.AlignCenter] = "M3 4 H21 M6 9 H18 M3 14 H21 M6 19 H18",
+        [SidebarSymbol.AlignRight] = "M3 4 H21 M9 9 H21 M3 14 H21 M9 19 H21",
+        [SidebarSymbol.AlignJustify] = "M3 4 H21 M3 9 H21 M3 14 H21 M3 19 H21",
+        [SidebarSymbol.Grid] = "M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z",
+        [SidebarSymbol.Trash] = "M3 6 H21 M9 6 V3 H15 V6 M5 6 L6 21 H18 L19 6 M10 10 V17 M14 10 V17",
+        [SidebarSymbol.Settings] = "M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M8 15 V21",
+        [SidebarSymbol.Calendar] = "M4 4 H20 Q21 4 21 5 V20 Q21 21 20 21 H4 Q3 21 3 20 V5 Q3 4 4 4 M3 9 H21 M8 2 V6 M16 2 V6 M7 13 H10 M14 13 H17 M7 17 H10",
+        [SidebarSymbol.Tag] = "M3 3 H12 L22 13 L13 22 L3 12 Z M7 7 H7.1",
+        [SidebarSymbol.Undo] = "M8 4 L3 9 L8 14 M3 9 H14 Q21 9 21 16 V20",
+        [SidebarSymbol.Redo] = "M16 4 L21 9 L16 14 M21 9 H10 Q3 9 3 16 V20",
         [SidebarSymbol.Paint] = "M14 3 L21 10 L12 19 L5 12 Z M5 12 L2 15 L9 22 L12 19 M16 11 L21 6 Q23 4 21 2 Q19 0 17 3 L12 8",
         [SidebarSymbol.Info] = "M22 12 A10 10 0 1 1 2 12 A10 10 0 1 1 22 12 M12 10 V17 M12 6 H12.1",
         [SidebarSymbol.Image] = "M4 3 H20 Q22 3 22 5 V19 Q22 21 20 21 H4 Q2 21 2 19 V5 Q2 3 4 3 M2 17 L8 11 L13 16 L17 12 L22 17 M17 7 H17.1",
@@ -51,6 +70,8 @@ internal sealed class SidebarGlyph : Control
     }.ToDictionary(pair => pair.Key, pair => Geometry.Parse(pair.Value));
 
     static SidebarGlyph() => AffectsRender<SidebarGlyph>(TextElement.ForegroundProperty);
+
+    public SidebarGlyph() : this(SidebarSymbol.Document) { }
 
     public SidebarGlyph(SidebarSymbol symbol, double size = 18)
     {

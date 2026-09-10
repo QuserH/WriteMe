@@ -20,12 +20,13 @@ public sealed class EditorSidebar : UserControl
 {
     public const double ToolWidth = 40;
     public const double PanelWidth = 280;
-    public const double PanelGap = 10;
     private sealed record Target(DocumentSession Session, long Revision, int Start, int Length, int Caret, EditorSelection Selection);
     private readonly BlockEditor _owner;
-    private readonly Grid _layout = new() { ColumnDefinitions = new("0,0,40") };
+    private BlockEditor Editor => _owner.ActiveEditor;
+    private readonly Grid _layout = new() { RowDefinitions = new("Auto,*"), Width = ToolWidth };
     private readonly Border _panel;
-    private readonly TextBlock _title = new() { FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Chrome("#474A50") };
+    private readonly Border _rail;
+    private readonly Button _close;
     private readonly ContentControl _content = new();
     private readonly StackPanel _railItems = new() { Spacing = 2 };
     private readonly Dictionary<EditorPanel, Func<Control>> _extraPanels = [];
@@ -33,6 +34,7 @@ public sealed class EditorSidebar : UserControl
     private readonly Dictionary<EditorPanel, Button> _tabs = [];
     private readonly Dictionary<string, ToggleButton> _marks = [];
     private readonly Dictionary<string, Button> _swatches = [];
+    private readonly Dictionary<string, Button> _alignments = [];
     private readonly Dictionary<BlockCommand, Button> _blockStyles = [];
     private readonly StackPanel _insert = new() { Spacing = 12, Margin = new(14, 0, 14, 14) };
     private readonly StackPanel _style = new() { Spacing = 10, Margin = new(14, 0, 14, 16) };
@@ -61,24 +63,20 @@ public sealed class EditorSidebar : UserControl
         VerticalAlignment = VerticalAlignment.Top;
         AutomationProperties.SetName(this, "编辑工具侧栏");
         KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
-        var header = new Grid { ColumnDefinitions = new("*,Auto"), Height = 44, Margin = new(14, 0, 9, 0) };
-        header.Children.Add(_title);
-        var close = Button(new SidebarGlyph(SidebarSymbol.Close, 13), "收起工具面板 · Esc", "SidebarClose", Close);
-        close.Width = close.Height = 25;
-        close.Padding = new(0);
-        close.Classes.Add("sidebarClose");
-        Grid.SetColumn(close, 1);
-        header.Children.Add(close);
-        var panelContent = new Grid { RowDefinitions = new("44,*") };
-        panelContent.Children.Add(header);
-        Grid.SetRow(_content, 1);
-        panelContent.Children.Add(_content);
+        var header = new Grid { ColumnDefinitions = new("*,Auto") };
+        header.Children.Add(_railItems);
+        _close = Button(new SidebarGlyph(SidebarSymbol.Close, 13), "收起工具面板 · Esc", "SidebarClose", Close);
+        _close.Width = _close.Height = 25;
+        _close.Padding = new(0); _close.IsVisible = false; _close.VerticalAlignment = VerticalAlignment.Center;
+        _close.Classes.Add("sidebarClose");
+        Grid.SetColumn(_close, 1);
+        header.Children.Add(_close);
         _panel = new Border
         {
-            Child = panelContent, IsVisible = false, Background = Ui.Chrome("#FCFDFE"), BorderBrush = Ui.Chrome("#ECEEF1"),
-            BorderThickness = new(1), CornerRadius = new(16), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Top,
-            BoxShadow = new(new BoxShadow { Blur = 18, OffsetY = 5, Color = Color.Parse("#10000000") })
+            Child = _content, IsVisible = false, Background = Brushes.Transparent,
+            Padding = new(0, 12, 0, 0), ClipToBounds = true
         };
+        Grid.SetRow(_panel, 1);
         _layout.Children.Add(_panel);
         var railItems = _railItems;
         Tab(EditorPanel.Insert, SidebarSymbol.Plus, "插入", "Ctrl+Alt+1");
@@ -93,13 +91,12 @@ public sealed class EditorSidebar : UserControl
             _tabs.Add(page, button);
             railItems.Children.Add(button);
         }
-        var rail = new Border
+        _rail = new Border
         {
-            Child = railItems, Padding = new(3), Background = Ui.Chrome("#FCFDFE"), BorderBrush = Ui.Chrome("#E4E6EA"),
+            Child = header, Padding = new(3), Background = Ui.Chrome("#FCFDFE"), BorderBrush = Ui.Chrome("#E4E6EA"),
             BorderThickness = new(1), CornerRadius = new(12), VerticalAlignment = VerticalAlignment.Top
         };
-        Grid.SetColumn(rail, 2);
-        _layout.Children.Add(rail);
+        _layout.Children.Add(_rail);
         Content = _layout;
 
         AutomationProperties.SetName(_search, "搜索插入块类型");
@@ -163,13 +160,24 @@ public sealed class EditorSidebar : UserControl
             lists.Add(button);
         }
         _style.Children.Add(Segments(lists));
+        var alignments = new List<Button>();
+        foreach (var (value, name, symbol) in new[] { ("left", "左对齐", SidebarSymbol.AlignLeft), ("center", "居中", SidebarSymbol.AlignCenter), ("right", "右对齐", SidebarSymbol.AlignRight), ("justify", "两端对齐", SidebarSymbol.AlignJustify) })
+        {
+            var button = IconButton(symbol, name, "SidebarAlign_" + value, () =>
+            {
+                if (ActivePanel != EditorPanel.Style || Capture() is not { } target) return;
+                target.Session.SetAlignment(target.Start, target.Length, value); _owner.FocusText(); QueueRefresh();
+            });
+            _alignments.Add(value, button); alignments.Add(button);
+        }
+        _style.Children.Add(Segments(alignments));
         _outdent = IconButton(SidebarSymbol.Outdent, "减少一级缩进 · Shift+Tab", "SidebarOutdent", () => ChangeIndent(true));
         _indent = IconButton(SidebarSymbol.Indent, "增加一级缩进 · Tab", "SidebarIndent", () => ChangeIndent(false));
         _link = IconButton(SidebarSymbol.Link, "添加或修改链接 · Ctrl+K", "SidebarLink", () =>
         {
             if (Capture() == null) return;
             _owner.FocusText();
-            _owner.Formatting.OpenLink();
+            Editor.Formatting.OpenLink();
         });
         _clear = IconButton(SidebarSymbol.Clear, "清除所选文字格式", "SidebarClear", () => Format(null));
         _style.Children.Add(Segments([_outdent, _indent, _link, _clear]));
@@ -215,12 +223,10 @@ public sealed class EditorSidebar : UserControl
     {
         if (page is EditorPanel.Page or EditorPanel.Info && !_extraPanels.ContainsKey(page)) return;
         ActivePanel = page;
-        _layout.ColumnDefinitions[0].Width = new GridLength(PanelWidth);
-        _layout.ColumnDefinitions[1].Width = new GridLength(PanelGap);
         _panel.IsVisible = true;
-        _title.Text = page switch { EditorPanel.Insert => "插入", EditorPanel.Style => "格式", EditorPanel.Page => "页面样式", _ => "页面信息" };
+        UpdatePresentation();
         _content.Content = page == EditorPanel.Insert ? _insertScroll : page == EditorPanel.Style ? _styleScroll : ExtraContent(page);
-        _owner.Formatting.Dismiss();
+        Editor.Formatting.Dismiss();
         Refresh();
         PanelChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -229,11 +235,34 @@ public sealed class EditorSidebar : UserControl
     {
         ActivePanel = null;
         _panel.IsVisible = false;
-        _layout.ColumnDefinitions[0].Width = new GridLength(0);
-        _layout.ColumnDefinitions[1].Width = new GridLength(0);
+        UpdatePresentation();
         foreach (var button in _tabs.Values) button.Classes.Set("active", false);
         PanelChanged?.Invoke(this, EventArgs.Empty);
         _owner.FocusText();
+    }
+
+    private void UpdatePresentation()
+    {
+        _layout.Width = IsOpen ? PanelWidth : ToolWidth;
+        _railItems.Orientation = IsOpen ? Orientation.Horizontal : Orientation.Vertical;
+        _railItems.Spacing = IsOpen ? 0 : 2;
+        _close.IsVisible = IsOpen;
+        _rail.Padding = IsOpen ? new(8, 4) : new(3);
+        _rail.CornerRadius = IsOpen ? new(0) : new(12);
+        _rail.BorderThickness = IsOpen ? new(0, 0, 0, 1) : new(1);
+        _rail.Background = IsOpen ? Brushes.Transparent : Ui.Chrome("#FCFDFE");
+        foreach (var (kind, button) in _tabs)
+        {
+            var (symbol, label) = kind switch
+            {
+                EditorPanel.Insert => (SidebarSymbol.Plus, "插入"), EditorPanel.Style => (SidebarSymbol.Format, "格式"),
+                EditorPanel.Page => (SidebarSymbol.Paint, "样式"), _ => (SidebarSymbol.Info, "信息")
+            };
+            button.Content = IsOpen ? new TextBlock { Text = label, FontSize = 12 } : new SidebarGlyph(symbol, 18);
+            button.Width = IsOpen ? 52 : 32;
+            button.Height = IsOpen ? 34 : 38;
+            button.Classes.Set("sidebarTab", IsOpen);
+        }
     }
 
     public void FocusPanel()
@@ -252,6 +281,7 @@ public sealed class EditorSidebar : UserControl
             var button = Button(new SidebarGlyph(symbol, 18), label, "Sidebar" + kind, () => Toggle(kind));
             button.Width = 32; button.Height = 38; button.Padding = new(0); button.Classes.Add("sidebarTool"); _tabs[kind] = button; _railItems.Children.Add(button);
         }
+        UpdatePresentation();
         _assetActions.Children.Clear();
         _assetActions.Children.Add(Section("文件与图片"));
         foreach (var (image, label, symbol) in new[] { (true, "图片", SidebarSymbol.Image), (false, "文件附件", SidebarSymbol.Attachment) })
@@ -324,7 +354,7 @@ public sealed class EditorSidebar : UserControl
         "heading" => command.Level switch { 1 => SidebarSymbol.Heading1, 2 => SidebarSymbol.Heading2, _ => SidebarSymbol.Heading3 },
         "toggleBlock" => SidebarSymbol.Toggle, "bulletList" => SidebarSymbol.BulletList, "orderedList" => SidebarSymbol.OrderedList,
         "taskList" => SidebarSymbol.Task, "blockquote" => SidebarSymbol.Quote, "codeBlock" => SidebarSymbol.Code,
-        "horizontalRule" => SidebarSymbol.Divider, _ => SidebarSymbol.Text
+        "horizontalRule" => SidebarSymbol.Divider, "table" => SidebarSymbol.Table, "columnList" => SidebarSymbol.Columns, _ => SidebarSymbol.Text
     };
     private static Button IconButton(SidebarSymbol symbol, string label, string id, Action action)
     {
@@ -357,14 +387,20 @@ public sealed class EditorSidebar : UserControl
 
     private Target? Capture()
     {
-        if (!_owner.IsEnabled || _owner.InputClient.IsComposing || _owner.Surface.Document.TextLength != _owner.Session.Projection.Text.Length) return null;
-        return new(_owner.Session, _owner.Session.Revision, _owner.Surface.SelectionStart, _owner.Surface.SelectionLength, _owner.Surface.CaretOffset, _owner.Session.Selection);
+        var editor = Editor;
+        if (!_owner.IsEnabled || editor.InputClient.IsComposing || !editor.Session.IsScopeAttached || editor.Surface.Document.TextLength != editor.Session.Projection.Text.Length) return null;
+        return new(editor.Session, editor.Session.Revision, editor.Surface.SelectionStart, editor.Surface.SelectionLength, editor.Surface.CaretOffset, editor.Session.Selection);
     }
     private void FilterInsert()
     {
         var commands = BlockCommand.Search(_search.Text?.Trim() ?? "");
         _insertItems.Children.Clear();
-        foreach (var command in commands) _insertItems.Children.Add(BlockButton(command, () => Insert(command)));
+        foreach (var command in commands)
+        {
+            var button = BlockButton(command, () => { if (command.Kind != "table") Insert(command); });
+            if (command.Kind == "table") button.Click += (_, _) => OpenTablePicker(button);
+            _insertItems.Children.Add(button);
+        }
         _insertEmpty.IsVisible = commands.Length == 0;
     }
     private void Insert(BlockCommand command)
@@ -375,6 +411,17 @@ public sealed class EditorSidebar : UserControl
         _owner.FocusText();
         _owner.Surface.ScrollTo(_owner.Surface.TextArea.Caret.Line, _owner.Surface.TextArea.Caret.Column);
         QueueRefresh();
+    }
+    private void OpenTablePicker(Button anchor)
+    {
+        if (ActivePanel != EditorPanel.Insert || Capture() is not { } target) return;
+        var flyout = new Flyout();
+        flyout.Content = new TableSizePicker((rows, columns) =>
+        {
+            if (ActivePanel != EditorPanel.Insert || Capture() != target) { flyout.Hide(); return; }
+            target.Session.InsertTable(target.Caret, rows, columns); flyout.Hide(); _owner.FocusText(); QueueRefresh();
+        });
+        flyout.ShowAt(anchor);
     }
     private void Convert(BlockCommand command)
     {
@@ -449,6 +496,11 @@ public sealed class EditorSidebar : UserControl
         _removeHighlight.IsEnabled = canFormat && formats!.Coverage("highlight") != MarkCoverage.None;
         _link.IsEnabled = canFormat || target != null && SelectionFormats.LinkAt(target.Session.Projection, target.Caret) != null;
         var row = target?.Session.Projection.At(target.Caret);
+        foreach (var (value, button) in _alignments)
+        {
+            button.IsEnabled = row is { IsAtomic: false };
+            button.Classes.Set("active", row != null && (row.Node.String("textAlign") ?? "left") == value);
+        }
         var parent = row == null ? null : NoteTree.Parent(target!.Session.Root, row.Block.Id);
         var index = row == null || parent == null ? -1 : parent.Content.IndexOf(row.Block);
         _outdent.IsEnabled = row is { IsAtomic: false } && parent?.Type == "toggleBlock" && index > 0;
