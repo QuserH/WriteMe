@@ -1,0 +1,123 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector=":is(Button).sidebarButton">
+    <Setter Property="Foreground" Value="{DynamicResource Chrome4B5058}" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.sidebarTool">
+    <Setter Property="Foreground" Value="{DynamicResource Chrome747A84}" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.sidebarTool:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF1F3F7}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome434951}" />
+  </Style>
+  <Style Selector="Button.sidebarTool.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome4A78C5}" />
+  </Style>
+  <Style Selector="Button.sidebarClose">
+    <Setter Property="Foreground" Value="{DynamicResource ChromeADB2BA}" />
+  </Style>
+  <Style Selector="Button.sidebarClose:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeEFF2F6}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome5B6573}" />
+  </Style>
+  <Style Selector="Button.sidebarInsert">
+    <Setter Property="Background" Value="{DynamicResource ChromeFCFDFE}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeE6E8ED}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="9" />
+  </Style>
+  <Style Selector="Button.sidebarInsert:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF1F5FC}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeD5DFEE}" />
+  </Style>
+  <Style Selector="Button.sidebarInsert :is(Control).insertAffordance">
+    <Setter Property="Opacity" Value="0.2" />
+  </Style>
+  <Style Selector="Button.sidebarInsert:pointerover :is(Control).insertAffordance">
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+  <Style Selector="Button.sidebarTextStyle">
+    <Setter Property="Background" Value="{DynamicResource ChromeF4F5F7}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="9" />
+  </Style>
+  <Style Selector="Button.sidebarTextStyle:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeEBEFF5}" />
+  </Style>
+  <Style Selector="Button.sidebarTextStyle.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeDCE8FC}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome87A6DC}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome365E9D}" />
+  </Style>
+  <Style Selector=":is(Button).sidebarSegment">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome555B64}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Button).sidebarSegment:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeEAEFF6}" />
+  </Style>
+  <Style Selector="Button.sidebarSegment.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeE1EBFC}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome466DAA}" />
+  </Style>
+  <Style Selector="ToggleButton.sidebarSegment:checked /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeE1EBFC}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome466DAA}" />
+  </Style>
+  <Style Selector="ToggleButton.sidebarSegment:indeterminate /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF0EBDF}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome89784E}" />
+  </Style>
+  <Style Selector="Button.sidebarSwatch">
+    <Setter Property="Foreground" Value="{DynamicResource Chrome55677B}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Button).sidebarButton:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome7D9FD7}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ToggleButton.sidebarSegment:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome7D9FD7}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ListBox.documentOutline ListBoxItem">
+    <Setter Property="Padding" Value="8,8" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+  <Style Selector="ListBox.documentOutline ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeEDF2FA}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome426797}" />
+  </Style>
+  <Style Selector="Button.navigationMode">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome50565D}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.navigationMode:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF0F3F7}" />
+  </Style>
+  <Style Selector="Button.navigationMode.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeE6EDFC}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome4E7ED4}" />
+  </Style>
+  <Style Selector="Button.toggleArrow:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeEAF0FA}" />
+  </Style>
+</Styles>

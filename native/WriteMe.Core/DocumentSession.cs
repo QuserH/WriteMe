@@ -1,0 +1,229 @@
+using System.Collections.Immutable;
+
+namespace WriteMe.Core;
+
+public sealed partial class DocumentSession
+{
+    private sealed record Snapshot(NoteNode Root, EditorSelection Selection);
+    private readonly List<Snapshot> _undo = [];
+    private readonly List<Snapshot> _redo = [];
+    private string? _lastGroup;
+    private long _lastEdit;
+    private bool _batch;
+    public NoteNode Root { get; private set; }
+    public DocumentProjection Projection { get; private set; }
+    public EditorSelection Selection { get; set; }
+    public long Revision { get; private set; }
+    public bool CanUndo => _undo.Count > 0;
+    public bool CanRedo => _redo.Count > 0;
+    public ImmutableArray<NoteMark>? TypingMarks { get; private set; }
+    public event EventHandler? Changed;
+
+    public DocumentSession(NoteNode root)
+    {
+        Root = NoteTree.Normalize(root);
+        Projection = new(Root);
+        Selection = EditorSelection.At(Projection.Rows[0].Node.Id);
+    }
+
+    private void Commit(NoteNode root, EditorSelection? selection = null, string? group = null)
+    {
+        if (ReferenceEquals(root, Root)) return;
+        if (_batch)
+        {
+            Root = NoteTree.Normalize(root);
+            Projection = new(Root);
+            Selection = ResolveSelection(selection ?? Selection);
+            return;
+        }
+        var now = Environment.TickCount64;
+        if (group == null || group != _lastGroup || now - _lastEdit > 750)
+        {
+            _undo.Add(new(Root, Selection));
+            if (_undo.Count > 200) _undo.RemoveAt(0);
+        }
+        _lastGroup = group;
+        _lastEdit = now;
+        _redo.Clear();
+        Root = NoteTree.Normalize(root);
+        Projection = new(Root);
+        Selection = ResolveSelection(selection ?? Selection);
+        Revision++;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private EditorSelection ResolveSelection(EditorSelection selection)
+    {
+        TextPoint Resolve(TextPoint point)
+        {
+            if (Projection.Find(point.NodeId) is { } row) return point with { Offset = Math.Clamp(point.Offset, 0, row.Text.Length) };
+            var ancestor = NoteTree.Parent(Root, point.NodeId);
+            while (ancestor != null)
+            {
+                var visible = Projection.Rows.FirstOrDefault(r => r.Block.Id == ancestor.Id);
+                if (visible != null) return new(visible.Node.Id, visible.Text.Length);
+                ancestor = NoteTree.Parent(Root, ancestor.Id);
+            }
+            return new(Projection.Rows[0].Node.Id, 0);
+        }
+        return new(Resolve(selection.Anchor), Resolve(selection.Caret));
+    }
+
+    public void BreakTypingGroup() { _lastGroup = null; TypingMarks = null; }
+
+    public void ReplaceSelectionWithEnter(int start, int length, bool sibling = false, bool softBreak = false)
+    {
+        var originalRoot = Root;
+        var originalProjection = Projection;
+        var originalSelection = Selection;
+        NoteNode result;
+        EditorSelection selection;
+        _batch = true;
+        try
+        {
+            if (length > 0) Edit(start, length, "", false);
+            Enter(length > 0 ? Projection.Offset(Selection.Caret) : start, sibling, softBreak);
+            result = Root;
+            selection = Selection;
+        }
+        finally
+        {
+            _batch = false;
+            Root = originalRoot;
+            Projection = originalProjection;
+            Selection = originalSelection;
+        }
+        Commit(result, selection);
+    }
+    public void Undo() => Restore(_undo, _redo);
+    public void Redo() => Restore(_redo, _undo);
+    private void Restore(List<Snapshot> from, List<Snapshot> to)
+    {
+        if (from.Count == 0) return;
+        to.Add(new(Root, Selection));
+        var entry = from[^1];
+        from.RemoveAt(from.Count - 1);
+        Root = entry.Root;
+        Projection = new(Root);
+        Selection = entry.Selection;
+        BreakTypingGroup();
+        Revision++;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Edit(int start, int length, string text, bool coalesce = true)
+    {
+        start = Math.Clamp(start, 0, Projection.Text.Length);
+        length = Math.Clamp(length, 0, Projection.Text.Length - start);
+        text = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (length == 0 && text.Length == 0) return;
+        var first = Projection.At(start);
+        var last = Projection.At(start + length);
+        if (Projection.Rows.Skip(first.Index).Take(last.Index - first.Index + 1).Any(row => row.IsAtomic))
+            throw new InvalidOperationException("选区含有尚未支持编辑的内容，已保留原文。可先在普通段落中编辑。");
+        var from = Math.Clamp(start - first.Start, 0, first.Text.Length);
+        var to = Math.Clamp(start + length - last.Start, 0, last.Text.Length);
+        if (first.Node.Id == last.Node.Id && !text.Contains('\n'))
+        {
+            var updated = RichText.Splice(first.Node, from, to - from, text, TypingMarks ?? NoteReferences.InsertionMarks(first.Node, from, to - from));
+            Commit(NoteTree.Update(Root, first.Node.Id, _ => updated), EditorSelection.At(first.Node.Id, from + text.Length), coalesce ? $"text:{first.Node.Id}" : null);
+            return;
+        }
+        var prefix = RichText.Slice(first.Node.Content, 0, from);
+        var suffix = RichText.Slice(last.Node.Content, to, last.Text.Length - to);
+        var chunks = text.Split('\n');
+        var marks = TypingMarks ?? NoteReferences.InsertionMarks(first.Node, from, to - from);
+        var root = Root;
+        // Removing a title unwraps its remaining children; a completely selected collapsed title removes its subtree.
+        for (var i = last.Index; i > first.Index; i--)
+        {
+            var row = Projection.Rows[i];
+            var removeWhole = row.Collapsed && start + length >= row.End;
+            root = RemoveRow(root, row, removeWhole);
+        }
+        var updatedFirst = first.Node with { Content = RichText.Compact([.. prefix, .. RichText.FromText(chunks[0], marks, first.Node.Type == "codeBlock"), .. (chunks.Length == 1 ? suffix : [])]) };
+        var removeFirstSubtree = first.Collapsed && from == 0 && length > 0 && start + length > first.End;
+        root = removeFirstSubtree
+            ? NoteTree.Replace(root, first.Block.Id, updatedFirst)
+            : NoteTree.Update(root, first.Node.Id, _ => updatedFirst);
+        var caretId = first.Node.Id;
+        if (chunks.Length > 1)
+        {
+            var added = chunks.Skip(1).Select(chunk => NoteNode.Paragraph() with { Content = RichText.FromText(chunk, marks) }).ToArray();
+            added[^1] = added[^1] with { Content = RichText.Compact([.. added[^1].Content, .. suffix]) };
+            caretId = added[^1].Id;
+            if (first.IsToggle && !removeFirstSubtree)
+                root = NoteTree.Update(root, first.Block.Id, block => block.WithAttr("collapsed", false) with { Content = block.Content.InsertRange(1, added) });
+            else
+                root = NoteTree.Replace(root, first.Node.Id, [updatedFirst, .. added]);
+        }
+        Commit(root, EditorSelection.At(caretId, chunks.Length == 1 ? from + text.Length : chunks[^1].Length));
+    }
+
+    private static NoteNode RemoveRow(NoteNode root, BlockRow row, bool removeWhole)
+    {
+        if (row.Block.Id != row.Node.Id)
+        {
+            var owner = NoteTree.Find(root, row.Block.Id);
+            if (owner == null) return root;
+            if (removeWhole) return NoteTree.Replace(root, owner.Id);
+            var remaining = owner.Content.Where(c => c.Id != row.Node.Id).ToArray();
+            if (owner.Type == "toggleBlock") return NoteTree.Replace(root, owner.Id, remaining);
+            return remaining.Length == 0 ? NoteTree.Replace(root, owner.Id) : NoteTree.Update(root, owner.Id, n => n with { Content = remaining.ToImmutableArray() });
+        }
+        return NoteTree.Replace(root, row.Node.Id);
+    }
+
+    public void Format(int start, int length, NoteMark? mark, bool forceRemove = false, bool toggle = true)
+    {
+        if (length == 0)
+        {
+            var row = Projection.At(start);
+            var existing = TypingMarks ?? RichText.MarksAt(row.Node, start - row.Start);
+            TypingMarks = mark == null ? [] : forceRemove || toggle && existing.Any(mark.Equivalent)
+                ? existing.Where(m => m.Type != mark.Type).ToImmutableArray()
+                : [.. existing.Where(m => m.Type != mark.Type), mark];
+            _lastGroup = null;
+            return;
+        }
+        var end = start + length;
+        var ranges = Projection.Rows.Where(row => !row.IsAtomic && row.Node.Type != "codeBlock" && row.End > start && row.Start < end)
+            .Select(row => (Row: row, From: Math.Max(start - row.Start, 0), Length: Math.Min(end, row.End) - Math.Max(start, row.Start))).ToArray();
+        var remove = forceRemove || toggle && mark != null && ranges.Length > 0 && ranges.All(r => RichText.Slice(r.Row.Node.Content, r.From, r.Length)
+            .Where(run => run.Type == "text" && run.Text.Length > 0).All(run => run.Marks.Any(mark.Equivalent)));
+        var root = Root;
+        foreach (var range in ranges) root = NoteTree.Update(root, range.Row.Node.Id, block => RichText.SetMark(block, range.From, range.Length, mark, remove));
+        Commit(root);
+    }
+
+    public void Toggle(Guid blockId)
+    {
+        var node = NoteTree.Find(Root, blockId);
+        if (node?.Type != "toggleBlock") return;
+        if (node.Content.Length == 1)
+        {
+            var child = NoteNode.Toggle("");
+            Commit(NoteTree.Update(Root, blockId, n => n.WithAttr("collapsed", false) with { Content = n.Content.Add(child) }), EditorSelection.At(child.Content[0].Id));
+            return;
+        }
+        Commit(NoteTree.Update(Root, blockId, n => n.WithAttr("collapsed", !n.Bool("collapsed"))));
+    }
+
+    public void ToggleAll()
+    {
+        SetAllCollapsed(NoteTree.Descendants(Root).Any(n => n.Type == "toggleBlock" && n.Content.Length > 1 && !n.Bool("collapsed")));
+    }
+
+    public void SetAllCollapsed(bool collapse)
+    {
+        NoteNode Visit(NoteNode n)
+        {
+            var children = n.Content.Select(Visit).ToImmutableArray();
+            var node = children.Where((child, index) => !ReferenceEquals(child, n.Content[index])).Any() ? n with { Content = children } : n;
+            return n.Type == "toggleBlock" && n.Content.Length > 1 && n.Bool("collapsed") != collapse ? node.WithAttr("collapsed", collapse) : node;
+        }
+        Commit(Visit(Root));
+    }
+
+    public void ToggleTask(Guid blockId) => Commit(NoteTree.Update(Root, blockId, n => n.Type == "taskItem" ? n.WithAttr("checked", !n.Bool("checked")) : n));
+}

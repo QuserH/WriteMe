@@ -1,0 +1,6 @@
+# Note: 源码换行与二进制边界，见 .agents/notes/implemented/process/2026-09-10-source-only-repository.md
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.ico binary
+*.icns binary

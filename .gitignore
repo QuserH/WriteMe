@@ -1,0 +1,92 @@
+# Note: 源码与本机环境分离，见 .agents/notes/implemented/process/2026-09-10-source-only-repository.md
+
+# Node dependencies and package caches (keep manifests and lock files)
+node_modules/
+dist/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.pnp.*
+
+# Rust / Tauri
+target/
+src-tauri/gen/schemas/
+
+# .NET dependencies and build outputs
+[Bb]in/
+[Oo]bj/
+[Tt]est[Rr]esults/
+.nuget/
+.dotnet/
+*.nupkg
+*.snupkg
+
+# Local Python tooling and environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor / OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
+
+# Logs and generated test output
+*.log
+coverage/
+.cache/
+/test-results/
+/playwright-report/
+
+# Packaged applications, runtimes and local backups
+*.exe
+*.dll
+*.pdb
+*.so
+*.so.*
+*.dylib
+*.msi
+*.msix
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.bundle
+/artifacts/
+
+# 决策看板（npm run init-board 生成）
+/board.html
+
+# 上游技能的演示图片留在本机，保留校验脚本、模板和看板源文件
+/.agents/skills/write-notes-like-deepseek/assets/*.png
+/.agents/skills/write-notes-like-deepseek/assets/*.svg
+
+# Secrets and machine-specific configuration (examples are source files)
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+
+# Local note databases and sync runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+sync-data/

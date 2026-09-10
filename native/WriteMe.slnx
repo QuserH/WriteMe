@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="WriteMe.Core/WriteMe.Core.csproj" />
+  <Project Path="WriteMe.Desktop/WriteMe.Desktop.csproj" />
+  <Project Path="WriteMe.Tests/WriteMe.Tests.csproj" />
+  <Project Path="WriteMe.SyncServer/WriteMe.SyncServer.csproj" />
+</Solution>

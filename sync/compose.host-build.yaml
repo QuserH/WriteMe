@@ -1,0 +1,5 @@
+# Optional Linux build-time network override; the running service keeps its isolated network.
+services:
+  writeme-sync:
+    build:
+      network: host

@@ -1,0 +1,102 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="WriteMe.Desktop.App" RequestedThemeVariant="Light">
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+    <Style Selector="Window">
+      <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI, Noto Sans CJK SC, sans-serif" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome292927}" />
+      <Setter Property="Background" Value="{DynamicResource ChromeFFFFFF}" />
+    </Style>
+    <Style Selector="Button.quiet">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.quiet:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeEEEDEA}" />
+    </Style>
+    <Style Selector="Button.quiet.active /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeE9E8E5}" />
+    </Style>
+    <Style Selector="Button.quiet:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.quiet:focus-visible /template/ ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Chrome7392AA}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource Chrome30302F}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="15,9" />
+    </Style>
+    <Style Selector="Button.documentCard">
+      <Setter Property="Background" Value="{DynamicResource ChromeFFFFFF}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeECEEF0}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="14" />
+    </Style>
+    <Style Selector="Button.documentCard:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeF0F2F5}" />
+    </Style>
+    <Style Selector=":is(Button).formatAction">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector=":is(Button).formatAction:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeF1F0ED}" />
+    </Style>
+    <Style Selector="ToggleButton.formatAction:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeE8EDF1}" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome365F7D}" />
+    </Style>
+    <Style Selector="ToggleButton.formatAction:indeterminate /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeF5EFE1}" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome927140}" />
+    </Style>
+    <Style Selector="Button.formatAction.active /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeE8EDF1}" />
+    </Style>
+    <Style Selector=":is(Button).formatAction:focus-visible /template/ ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Chrome7392AA}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="TextBox.clean">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="TextBox.clean /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.documentList">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,10" />
+      <Setter Property="Margin" Value="0,2" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeE9E8E5}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ Rectangle#SelectionIndicator">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <StyleInclude Source="avares://WriteME.Native/Themes/EditorSidebar.axaml" />
+  </Application.Styles>
+</Application>

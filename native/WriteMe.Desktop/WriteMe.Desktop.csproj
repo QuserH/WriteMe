@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>WriteME.Native</AssemblyName>
+    <RootNamespace>WriteMe.Desktop</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../src-tauri/icons/icon.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <ProjectReference Include="../WriteMe.Core/WriteMe.Core.csproj" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.21" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.21" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.4.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="../../src-tauri/icons/icon.ico" Link="Assets/icon.ico" />
+  </ItemGroup>
+</Project>

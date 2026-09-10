@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../WriteMe.Core/WriteMe.Core.csproj" />
+    <ProjectReference Include="../WriteMe.Desktop/WriteMe.Desktop.csproj" />
+    <ProjectReference Include="../WriteMe.SyncServer/WriteMe.SyncServer.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.3.21" />
+  </ItemGroup>
+</Project>

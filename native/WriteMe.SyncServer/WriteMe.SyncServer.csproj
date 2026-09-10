@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><AssemblyName>WriteME.SyncServer</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../WriteMe.Core/WriteMe.Core.csproj" /></ItemGroup>
+</Project>
