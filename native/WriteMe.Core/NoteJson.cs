@@ -16,6 +16,7 @@ public static class NoteJson
         if (json.RootElement.ValueKind != JsonValueKind.Object || !json.RootElement.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String || type.GetString() != "doc")
             throw new InvalidDataException("文件不是 WriteME / TipTap 文档 JSON");
         var root = ReadNode(json.RootElement);
+        NoteComments.Validate(root);
         return root.Content.IsEmpty ? root with { Content = [NoteNode.Paragraph()] } : root;
     }
 

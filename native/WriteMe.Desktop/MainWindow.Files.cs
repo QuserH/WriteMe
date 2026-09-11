@@ -73,7 +73,7 @@ public sealed partial class MainWindow
         }
         await using var stream = await file.OpenWriteAsync(); stream.SetLength(0);
         await using var writer = new StreamWriter(stream); await writer.WriteAsync(markdown ? NoteMarkdown.Export(root) : DocumentText.Plain(root));
-        _status.Text = "笔记已导出";
+        _status.Text = root.Attrs.ContainsKey(NoteComments.Attribute) ? "正文已导出；评论和批注请使用 JSON 或资料库 ZIP 备份保留" : "笔记已导出";
     }
     private async Task ExportBackupAsync()
     {

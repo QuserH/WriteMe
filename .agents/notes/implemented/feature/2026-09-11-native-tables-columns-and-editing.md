@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+- 单元格和栏内的段落评论/文字批注写入根会话，浮层挂到根窗口，不受单元格高度裁剪。整格清空或 TSV 替换保留首段身份与段落评论，被删除的其他段落及文字范围成为失效引用；复制复合块剥离评论关联。父消息、草稿与持久化契约见 [原生评论](2026-09-11-native-comments.md)。
+
 - `LayoutBlocks.cs` 使用 TipTap `table/tableRow/tableCell/tableHeader` 与 `columnList/column`。矩形表格支持 1–100 行、1–12 列，分栏支持两栏和三栏。合并单元格、不规则或超限结构保留 JSON 并显示明确提示，不能被普通行列命令改写。
 - `ScopedSessions.cs` 为单元格或分栏创建区域会话，区域事务沿父级提交到主 `DocumentSession`。主文档只有一套 200 项历史，每个历史项保存事务前后文档与选区；导航到其他格子不能改变重做的落点。同一区域、同一文字块的连续输入沿用 750ms 分组，删除区域后旧会话不能继续写入。
 - `DocumentProjection.LayoutHost` 把内部文字映射到所在复合块。复合块在父编辑器中占一个原子位置，内部文字由原生区域表面编辑；跳转先展开必要折叠祖先，再进入正确单元格或分栏。标题目录、全文文字和关联抽取共用 `NoteNode.IsContentContainer`，搜索与关联索引版本升为 2，升级事务重建派生索引而不修改正文。

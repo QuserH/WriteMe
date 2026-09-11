@@ -14,6 +14,7 @@
       <TextBlock x:Name="NavigationTitle" Grid.Column="1" Foreground="{DynamicResource Chrome7B7D82}" FontSize="13" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="400" />
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
         <Button x:Name="SyncButton" Classes="quiet" Content="同步" FontSize="11" AutomationProperties.Name="资料库同步" AutomationProperties.AutomationId="SyncButton" />
+        <Button x:Name="CommentsButton" Classes="quiet" AutomationProperties.Name="查看评论" AutomationProperties.AutomationId="CommentsButton" />
         <Button x:Name="FavoriteButton" Classes="quiet" Content="☆" FontSize="19" ToolTip.Tip="收藏文档" AutomationProperties.Name="收藏文档" AutomationProperties.AutomationId="FavoriteDocument" Focusable="False" />
         <Button x:Name="UndoButton" Classes="quiet" Content="↶" FontSize="18" ToolTip.Tip="撤销 · Ctrl+Z" AutomationProperties.Name="撤销" Focusable="False" />
         <Button x:Name="RedoButton" Classes="quiet" Content="↷" FontSize="18" ToolTip.Tip="重做 · Ctrl+Shift+Z" AutomationProperties.Name="重做" Focusable="False" />
@@ -81,7 +82,10 @@
           <Border x:Name="CoverFrame" IsVisible="False" Height="170" Margin="0,-35,0,22" CornerRadius="14" ClipToBounds="True" Background="{DynamicResource ChromeF0F2F5}">
             <Image x:Name="CoverImage" Stretch="UniformToFill" />
           </Border>
-          <TextBox x:Name="TitleBox" Classes="clean" FontSize="32" FontWeight="SemiBold" MinHeight="0" Watermark="无标题" TextWrapping="Wrap" AutomationProperties.Name="笔记标题" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="TitleBox" Classes="clean" FontSize="32" FontWeight="SemiBold" MinHeight="0" Watermark="无标题" TextWrapping="Wrap" AutomationProperties.Name="笔记标题" />
+            <Button x:Name="TitleCommentButton" Grid.Column="1" Classes="quiet" VerticalAlignment="Top" Margin="8,6,0,0" ToolTip.Tip="添加文档评论" AutomationProperties.Name="添加文档评论" AutomationProperties.AutomationId="TitleCommentButton" />
+          </Grid>
           <local:PageDivider x:Name="PageTitleDivider" Height="1" Margin="0,20,0,0" />
         </StackPanel>
       </Grid>

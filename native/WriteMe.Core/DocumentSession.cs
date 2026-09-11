@@ -159,14 +159,16 @@ public sealed partial class DocumentSession
         }
         if (!first.IsAtomic && first.Node.Id == last.Node.Id && !text.Contains('\n'))
         {
-            var updated = RichText.Splice(first.Node, from, to - from, text, TypingMarks ?? NoteReferences.InsertionMarks(first.Node, from, to - from));
+            var updated = RichText.Splice(first.Node, from, to - from, text,
+                NoteComments.InsertionMarks(first.Node, from, to - from, TypingMarks ?? NoteReferences.InsertionMarks(first.Node, from, to - from)));
             Commit(NoteTree.Update(Root, first.Node.Id, _ => updated), EditorSelection.At(first.Node.Id, from + text.Length), coalesce ? $"text:{first.Node.Id}" : null);
             return;
         }
         var prefix = first.IsAtomic ? [] : RichText.Slice(first.Node.Content, 0, from);
         var suffix = last.IsAtomic ? [] : RichText.Slice(last.Node.Content, to, last.Text.Length - to);
         var chunks = text.Split('\n');
-        var marks = TypingMarks ?? (first.IsAtomic ? [] : NoteReferences.InsertionMarks(first.Node, from, Math.Max(0, to - from)));
+        var removed = first.Node.Id == last.Node.Id ? Math.Max(0, to - from) : first.Text.Length - from;
+        var marks = first.IsAtomic ? [] : NoteComments.InsertionMarks(first.Node, from, removed, TypingMarks ?? NoteReferences.InsertionMarks(first.Node, from, removed));
         var root = Root;
         // Removing a title unwraps its remaining children; a completely selected collapsed title removes its subtree.
         for (var i = last.Index; i > first.Index; i--)
@@ -177,6 +179,10 @@ public sealed partial class DocumentSession
             root = RemoveRow(root, row, removeWhole);
         }
         var updatedFirst = (first.IsAtomic ? NoteNode.Paragraph() : first.Node) with { Content = RichText.Compact([.. prefix, .. RichText.FromText(chunks[0], marks, first.Node.Type == "codeBlock"), .. (chunks.Length == 1 ? suffix : [])]) };
+        // Joining surviving paragraph content carries both discussions to the merged paragraph.
+        // Fully deleted later paragraphs keep their discussions as orphans instead.
+        var keepLastAnchor = first.Node.Id != last.Node.Id && !last.IsAtomic && (to == 0 || to < last.Text.Length);
+        if (chunks.Length == 1 && keepLastAnchor) updatedFirst = NoteComments.MergeBlockAnchors(updatedFirst, last.Node);
         var removeFirstSubtree = first.Collapsed && from == 0 && length > 0 && start + length > first.End;
         root = first.IsAtomic ? NoteTree.Replace(root, first.Block.Id, from == first.Text.Length ? [first.Block, updatedFirst] : [updatedFirst]) : removeFirstSubtree
             ? NoteTree.Replace(root, first.Block.Id, updatedFirst)
@@ -186,6 +192,7 @@ public sealed partial class DocumentSession
         {
             var added = chunks.Skip(1).Select(chunk => NoteNode.Paragraph() with { Content = RichText.FromText(chunk, marks) }).ToArray();
             added[^1] = added[^1] with { Content = RichText.Compact([.. added[^1].Content, .. suffix]) };
+            if (keepLastAnchor) added[^1] = NoteComments.MergeBlockAnchors(added[^1], last.Node);
             caretId = added[^1].Id;
             if (first.IsToggle && !removeFirstSubtree)
                 root = NoteTree.Update(root, first.Block.Id, block => block.WithAttr("collapsed", false) with { Content = block.Content.InsertRange(1, added) });
@@ -214,7 +221,7 @@ public sealed partial class DocumentSession
         if (length == 0)
         {
             var row = Projection.At(start);
-            var existing = TypingMarks ?? RichText.MarksAt(row.Node, start - row.Start);
+            var existing = (TypingMarks ?? RichText.MarksAt(row.Node, start - row.Start)).Where(m => m.Type != NoteComments.MarkType).ToImmutableArray();
             TypingMarks = mark == null ? [] : forceRemove || toggle && existing.Any(mark.Equivalent)
                 ? existing.Where(m => m.Type != mark.Type).ToImmutableArray()
                 : [.. existing.Where(m => m.Type != mark.Type), mark];

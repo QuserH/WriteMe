@@ -86,7 +86,8 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(_tools, 1);
         _tools.ZIndex = 20;
         this.FindControl<Grid>("Shell")!.Children.Add(_tools);
-        _tools.PanelChanged += (_, _) => UpdateSidebars();
+        InitializeCommentsUi();
+        _tools.PanelChanged += (_, _) => { if (_tools.IsOpen) CloseComments(); UpdateSidebars(); };
         SizeChanged += (_, _) => UpdateSidebars();
         _editor.Notice += message => _status.Text = message;
         _editor.SelectionChanged += (_, _) => UpdateHistoryButtons();
@@ -112,7 +113,8 @@ public sealed partial class MainWindow : Window
         this.FindControl<Button>("RedoButton")!.Click += (_, _) => { _editor.Session.Redo(); _editor.FocusText(); };
         this.FindControl<Button>("SidebarButton")!.Click += (_, _) =>
         {
-            if (_sidebarVisible && _tools.IsOpen && Bounds.Width < 1080) _tools.Close();
+            if (_comments.IsVisible && Bounds.Width < 1240) CloseComments();
+            else if (_sidebarVisible && _tools.IsOpen && Bounds.Width < 1080) _tools.Close();
             else _sidebarVisible = !_sidebarVisible;
             UpdateSidebars();
         };
@@ -128,9 +130,15 @@ public sealed partial class MainWindow : Window
         AddHandler(KeyDownEvent, async (_, e) =>
         {
             if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key == Key.M)
+            {
+                e.Handled = true;
+                if (!_comments.IsComposing) _editor.RequestComment(_title.IsKeyboardFocusWithin);
+                return;
+            }
             if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key is Key.D1 or Key.D2 or Key.D3)
             {
-                if (_editor.IsAnyComposing) { e.Handled = true; return; }
+                if (_editor.IsAnyComposing || _comments.IsComposing) { e.Handled = true; return; }
                 if (e.Key == Key.D3) { ShowNavigation(true); _outline.FocusOutline(); }
                 else
                 {
@@ -175,7 +183,8 @@ public sealed partial class MainWindow : Window
 
     private void UpdateSidebars()
     {
-        var showLibrary = _sidebarVisible && (!_tools.IsOpen || Bounds.Width >= 1080);
+        var commentsOpen = _comments?.IsVisible == true && !_comments.IsContextual;
+        var showLibrary = _sidebarVisible && (commentsOpen ? Bounds.Width >= 1240 : !_tools.IsOpen || Bounds.Width >= 1080);
         this.FindControl<Grid>("Shell")!.ColumnDefinitions[0].Width = new GridLength(showLibrary ? 292 : 0);
         this.FindControl<Border>("LibrarySidebar")!.IsVisible = showLibrary;
         this.FindControl<Grid>("SpacePane")!.IsVisible = !_documentNavigation;
@@ -185,7 +194,8 @@ public sealed partial class MainWindow : Window
         _tools.Margin = new(0, _tools.IsOpen ? 4 : 36, 16, 14);
         _tools.MaxHeight = Math.Max(160, Bounds.Height - 56 - _tools.Margin.Top - _tools.Margin.Bottom);
         _tools.Height = _tools.IsOpen ? _tools.MaxHeight : double.NaN;
-        var reserved = (_tools.IsOpen ? EditorSidebar.PanelWidth : EditorSidebar.ToolWidth) + 32;
+        if (_comments != null && !_comments.IsContextual) _comments.MaxHeight = Math.Max(220, Bounds.Height - 74);
+        var reserved = (commentsOpen ? CommentsPane.PanelWidth : _tools.IsOpen ? EditorSidebar.PanelWidth : EditorSidebar.ToolWidth) + 32;
         this.FindControl<Grid>("DocumentRegion")!.Margin = new(0, 0, reserved, 0);
         var available = Bounds.Width - (showLibrary ? 292 : 0) - reserved;
         var left = available < 680 ? -20 : 32;
@@ -200,6 +210,7 @@ public sealed partial class MainWindow : Window
         _documentNavigation = document;
         _sidebarVisible = true;
         if (_tools.IsOpen && Bounds.Width < 1080) _tools.Close();
+        if (_comments.IsVisible && Bounds.Width < 1240) CloseComments();
         UpdateSidebars();
     }
 
@@ -264,6 +275,7 @@ public sealed partial class MainWindow : Window
         _switching = true;
         _editor.IsEnabled = false;
         _title.IsReadOnly = true;
+        _comments.Refresh();
         try
         {
             while (_requestedDocument is { } requested && requested != _active.Id)
@@ -336,6 +348,7 @@ public sealed partial class MainWindow : Window
         RefreshReferences();
         if (refreshPage) ApplyPageAppearance();
         _tools.RefreshExtendedPanel(refreshPage);
+        _comments.Bind(_active.Id, _editor.Session);
     }
 
     private void UpdateHistoryButtons()

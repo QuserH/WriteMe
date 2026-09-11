@@ -176,6 +176,9 @@ public static class NoteMarkdown
 
     public static string Export(NoteNode root, string assetsPrefix = "assets/")
     {
+        // Markdown carries readable body content; JSON/ZIP carry discussions and anchors.
+        // Remove anchors from custom fenced blocks too, so they cannot become dangling IDs.
+        root = NoteComments.RemoveMarks(root) with { Attrs = root.Attrs.Remove(NoteComments.Attribute) };
         string Node(NoteNode node)
         {
             switch (node.Type)

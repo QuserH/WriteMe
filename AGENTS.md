@@ -23,6 +23,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 斜杠菜单 | 分类/二级导航、全局搜索、原子命令与区域浮层 | Desktop 的 `Editing/SlashCommandMenu.cs` / `BlockEditor.Commands.cs`，Core 的 `SlashCommands.cs` |
 | 拖动落点、预览与光标 | 相邻块边界、可见子树只读预览、按文字度量的光标与预编辑 | Core 的 `BlockDropTargets.cs`，Desktop 的 `Editing/BlockDragPreview.cs` / `BlockCaretGeometry.cs` |
 | 选区格式 | 原生浮动工具栏、文字色/高亮、链接草稿、键盘导航 | `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` / `TextColorPicker.cs`，核心在 `native/WriteMe.Core/SelectionFormats.cs` / `TextColor.cs` |
+| 段落评论 | 段落气泡/浮层、逐条回复与回复的回复、删除占位、选区批注 | Core 的 `NoteComments.cs` / `CommentCommands.cs`，Desktop 的 `Editing/BlockEditor.ParagraphComments.cs` / `BlockEditor.Comments.cs` / `CommentsPane.cs` / `MainWindow.Comments.cs` |
 | 左侧导航 | 空间/当前文档模式、标题目录、隐藏标题定位 | `native/WriteMe.Desktop/Editing/DocumentOutlinePane.cs`，布局与模式在 `MainWindow.axaml` / `.cs`，目录模型在 `native/WriteMe.Core/DocumentTools.cs` |
 | 右侧工具 | 纸张外的插入/格式/样式/信息横向标签、收起胶囊、双侧栏响应布局 | `native/WriteMe.Desktop/Editing/EditorSidebar.cs` / `SidebarGlyph.cs`，扩展面板在 `MainWindow.Appearance.cs` |
 | 表格与分栏 | 区域编辑、共享历史、行列/宽度/比例、TSV、对齐 | Core 的 `LayoutBlocks.cs` / `ScopedSessions.cs`，Desktop 的 `Editing/BlockEditor.Layouts.cs` / `NativeTableView*.cs` / `NativeColumnsView.cs` |
@@ -34,7 +35,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 折叠排版 | 矢量三角、28px 标记列/缩进、长标题续行与选区坐标 | `native/WriteMe.Desktop/Editing/ToggleDisclosureButton.cs` / `BlockRendering.cs` / `BlockTextFormatter.cs` |
 | 文档核心 | 不可变文档树、TipTap JSON、可见投影、富文本、统一历史、结构移动 | `native/WriteMe.Core/` |
 | 本地存储 | Microsoft.Data.Sqlite，独立原生库及旧库在线备份导入 | `native/WriteMe.Core/NoteStore.cs` |
-| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 227 项，含真实 HTTP | `native/WriteMe.Tests/` |
+| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 254 项，含真实 HTTP | `native/WriteMe.Tests/` |
 | 发布 | 自带 .NET 运行时的 Windows 目录；最近成功版本清单 | `scripts/Publish-Native.ps1` / `Start-Native.ps1` → `artifacts/native/` |
 
 ### 保留的 Web / Tauri 基线
@@ -111,6 +112,7 @@ npm run init-board          # 生成决策看板 board.html
 - `documents(id, title, content, created_at, updated_at)`，WAL；两版 `content` 均使用 **TipTap 块 JSON 字符串**。原生 `NoteJson` 兼容旧纯文本、旧空折叠标题、marks 与未知节点；Web 由 `src/editor/doc.ts#parseContent` 迁移。两个资料库后续修改独立，不做双向同步。
 - 新增块类型/序列化改动同步原生 `NoteJson`、`DocumentProjection`、相关回归与原生决策笔记；涉及 Web 时同步 `src/editor/doc.ts` 与 [M1 决策笔记](.agents/notes/implemented/feature/2026-09-08-m1-tiptap-block-editor.md)。保持旧 `src/lib/api.ts` 契约。
 - 原生文字、格式、折叠、拖动都经过 `DocumentSession`，共用 200 项有界历史；不要另开 UI 撤销栈。原生 650ms 自动保存在后台串行完成，切换和关闭必须等待保存。相同标题与正规化正文的保存必须无操作；Avalonia 标题变更事件会延后触发，不能只用 `_loading` 阻止远端显示刷新置脏。
+- **评论遵循帖子式回复，用户明确不需要已解决/未解决**。根 `writemeComments` 目录、段落 `writemeCommentIds` 属性和文字 `comment` marks 同属根会话；`replyTo` 指向同一讨论内已有消息。删除回复保留空正文墓碑与后续回复，删除首评才删除整条讨论，均可撤销。复制块剥离关联、整篇副本保留；清除格式和转代码块不能丢批注，整格替换保留首段评论。无选区 Ctrl+Alt+M 评论当前段，空段/单元格/栏也支持。浮层只显示当前段、全文入口显示全部；草稿按回复目标保留，旧会话/失效原文/预编辑不能误提交。完整契约见 [原生评论](.agents/notes/implemented/feature/2026-09-11-native-comments.md)。
 - `/` 先分类再进入二级菜单；确认叶项才通过 `ApplySlash` 原子移除查询并应用，格式/颜色/缩进用分离草稿提交一次根历史。输入焦点保留，旧按钮、Revision、选区、前缀、IME 与 `IsEffectivelyEnabled` 都须核对。插入侧栏继续复用独立的 `BlockCommand.All/Search`。
 - 区域浮层通过 `OverlayOwner/MountOverlay` 挂到根编辑区，不能被单元格裁剪；IME、取消拖动、当前菜单优先于区域 Tab/Escape。`DetachedFromVisualTree` 期间只隐藏并释放状态，归还浮层延到 Dispatcher，不能同步修改 Avalonia 正遍历的祖先子集合。
 - 拖动期望深度按抓取点的横向位移以 28px 一档计算，不用文字起点的绝对阈值；Core `ResolveBlockDrop` 按相邻可见块的共同边界选择实际层级，父标题下沿进入首项，明确左拖可退出祖先。先选层级再用 `CanMove` 排除空移动，不能跨层回退。提示线和提交共用目标，展开块后的线在最后一个可见后代后；横向起点按移动块在目的层级的前缀计算，不能取相邻正文的前缀。预览复用只读原生表面及单元格行高，宽度与断行取源区域，长子树保留有限视口；取消/释放/关闭必须释放预览。
@@ -146,6 +148,7 @@ npm run init-board          # 生成决策看板 board.html
 - **折叠列表已实现**：原生版具备独立层级状态、子树拖入/移出、无损取消折叠及快捷键；手柄只在悬停时出现，移动保留折叠类型/子树/状态。禁止重开 AvaloniaEdit 默认文本拖放绕过结构事务。原生修改运行 `npm run native:test`；Web 细节见 `.agents/notes/implemented/feature/2026-09-09-toggle-block.md`，对应 `npm run test:editor`。
 - **原生后续验证**：已通过 Windows 中文输入、跨块选区、统一撤销与旧库兼容回归；10,000 块测试只证明虚拟化与投影正确，不是完整性能基准。还需同负载的真实输入/滚动延迟测量、跨平台输入、普通列表项独立拖动、完整剪贴板与无障碍支持。禁止由语言比例、exe 大小或不同负载的内存快照推导性能提升。
 - **M3–M6 已实现**：标签/双链/收藏、空间/文件夹/中文搜索/卡片、页面/封面/附件/主题/备份/每日/演示，以及自建同步。后续工作以真实使用反馈、跨平台输入、完整剪贴板/无障碍、普通列表独立拖动和同负载性能测量为依据；不把当前完成范围写成全部 Craft 功能。用户可见范围见 `README.md`，Docker 部署验证结果见同步笔记。
+- **段落评论已实现**：每段直接留言、逐条回复及回复的回复、编辑/删除/撤销、全文评论和文字批注，含 JSON/ZIP 与同账号文档同步。共享邀请、跨账号权限、@提醒、通知和逐条消息并发合并仍未实现；不能把本机作者“我”称作多人评论服务。
 
 
 

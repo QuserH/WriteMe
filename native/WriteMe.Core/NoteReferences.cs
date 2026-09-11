@@ -135,7 +135,8 @@ public sealed partial class DocumentSession
         else
         {
             label = NoteReferences.DisplayTitle(label.Replace('\r', ' ').Replace('\n', ' ').Replace('\u2028', ' '));
-            var marks = RichText.MarksAt(block, local).Where(item => item.Type is not ("link" or "noteLink")).ToImmutableArray();
+            var marks = NoteComments.InsertionMarks(block, local, length, RichText.MarksAt(block, local))
+                .Where(item => item.Type is not ("link" or "noteLink")).ToImmutableArray();
             var content = RichText.FromText(label, marks.Add(mark));
             var space = local + length == row.Text.Length || !char.IsWhiteSpace(row.Text[local + length]);
             block = block with { Content = RichText.Compact([.. RichText.Slice(block.Content, 0, local), .. content,

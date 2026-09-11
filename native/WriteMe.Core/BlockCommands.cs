@@ -161,7 +161,9 @@ public sealed partial class DocumentSession
                 break;
             case "blockquote": replacement = new(kind) { Content = [text, .. tail] }; break;
             case "codeBlock":
-                text = text with { Type = "codeBlock", Content = RichText.FromText(RichText.Plain(text), [], true) };
+                text = text with { Type = "codeBlock", Content = RichText.Compact(text.Content.SelectMany(run =>
+                    RichText.FromText(RichText.Plain(NoteNode.Paragraph() with { Content = [run] }),
+                        run.Marks.Where(mark => mark.Type == NoteComments.MarkType).ToImmutableArray(), true))) };
                 replacement = text;
                 break;
             case "horizontalRule":
@@ -224,7 +226,7 @@ public sealed partial class DocumentSession
     {
         if (NoteTree.Find(Root, id) is not { } node) return;
         NoteNode Copy(NoteNode n) => n with { Id = Guid.NewGuid(), Content = n.Content.Select(Copy).ToImmutableArray() };
-        Commit(NoteTree.Replace(Root, id, node, Copy(node)));
+        Commit(NoteTree.Replace(Root, id, node, Copy(NoteComments.RemoveMarks(node))));
     }
 }
 

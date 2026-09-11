@@ -201,6 +201,15 @@ public sealed partial class DocumentSession
         return true;
     }
 
+    // Note: 整格清空/替换保留首段的段落评论，文字批注按被替换内容失效，见 .agents/notes/implemented/feature/2026-09-11-native-comments.md
+    private static NoteNode ReplaceCellText(NoteNode cell, string value)
+    {
+        var paragraph = NoteNode.Paragraph();
+        if (cell.Content.FirstOrDefault() is { IsTextBlock: true } previous)
+            paragraph = NoteComments.MergeBlockAnchors(paragraph with { Id = previous.Id }, previous);
+        return cell with { Content = [paragraph with { Content = RichText.FromText(value.Replace("\r\n", "\n").Replace('\r', '\n').Replace('\n', '\u2028'), []) }] };
+    }
+
     public bool ReplaceTableRange(Guid id, CellRange range, string? text)
     {
         var table = NoteTree.Find(Root, id);
@@ -212,7 +221,7 @@ public sealed partial class DocumentSession
             var value = r == range.Top && c == range.Left ? text ?? "" : "";
             if (value.Length == 0 && cell.Content.Length == 1 && cell.Content[0].Type == "paragraph" && cell.Content[0].Content.IsEmpty) return cell;
             changed = true;
-            return cell with { Content = [NoteNode.Paragraph() with { Content = RichText.FromText(value.Replace("\r\n", "\n").Replace('\r', '\n').Replace('\n', '\u2028'), []) }] };
+            return ReplaceCellText(cell, value);
         }).ToImmutableArray() }).ToImmutableArray();
         if (!changed) return false;
         var after = table with { Content = rows };
@@ -237,7 +246,7 @@ public sealed partial class DocumentSession
             while (cells.Count < width) cells.Add(LayoutBlocks.Cell(header && r == 0));
             if (r >= row && r < row + values.Length)
                 for (var c = 0; c < values[r - row].Length; c++)
-                    cells[column + c] = cells[column + c] with { Content = [NoteNode.Paragraph() with { Content = RichText.FromText(values[r - row][c].Replace("\r\n", "\n").Replace('\r', '\n').Replace('\n', '\u2028'), []) }] };
+                    cells[column + c] = ReplaceCellText(cells[column + c], values[r - row][c]);
             rows[r] = rows[r] with { Content = cells.ToImmutable() };
         }
         return CommitTable(table, table with { Content = rows.ToImmutable() }, row, column);

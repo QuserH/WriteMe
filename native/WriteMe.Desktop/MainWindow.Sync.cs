@@ -48,6 +48,7 @@ public sealed partial class MainWindow
     {
         var editable = !_syncApplying && !_switching && !_closingPending && !ActiveHasConflict;
         _editor.IsEnabled = editable; _title.IsReadOnly = !editable; _outline.IsEnabled = editable;
+        _comments.Refresh(); UpdateCommentButtons();
         UpdateHistoryButtons();
     }
     private void UpdateSyncStatus(string? value = null)
@@ -94,7 +95,7 @@ public sealed partial class MainWindow
 
     private async Task<IReadOnlySet<string>> ApplyRemoteAsync(string target, SyncResponse response, CancellationToken cancellation)
     {
-        while (_switching || _editor.InputClient.IsComposing || _title.GetVisualDescendants().OfType<TextPresenter>().Any(presenter => !string.IsNullOrEmpty(presenter.PreeditText)))
+        while (_switching || _editor.IsAnyComposing || _comments.IsComposing || _title.GetVisualDescendants().OfType<TextPresenter>().Any(presenter => !string.IsNullOrEmpty(presenter.PreeditText)))
             await Task.Delay(60, cancellation);
         cancellation.ThrowIfCancellationRequested();
         var enabled = IsEnabled; _syncApplying = true; IsEnabled = false; UpdateEditorAvailability();
@@ -242,8 +243,12 @@ public sealed partial class MainWindow
             card.Children.Add(new TextBlock { Text = "设备 " + version.Id.Split(':')[0][..Math.Min(8, version.Id.IndexOf(':'))] + (payload == null ? "" : " · " + DateTimeOffset.FromUnixTimeMilliseconds(payload.Document.UpdatedAt).LocalDateTime.ToString("M/d HH:mm")), FontSize = 10, Foreground = Ui.Muted });
             if (payload != null)
             {
-                var preview = new TextBox { Text = DocumentText.Plain(NoteJson.ParseStrict(payload.Document.Content)), IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 85, MaxHeight = 180, FontSize = 12 };
+                var versionRoot = NoteJson.ParseStrict(payload.Document.Content);
+                var preview = new TextBox { Text = DocumentText.Plain(versionRoot), IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 85, MaxHeight = 180, FontSize = 12 };
                 ScrollViewer.SetVerticalScrollBarVisibility(preview, ScrollBarVisibility.Auto); card.Children.Add(preview);
+                var comments = new TextBox { Text = NoteComments.For(versionRoot).Summary(), IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 180, FontSize = 12 };
+                AutomationProperties.SetName(comments, "此版本的评论");
+                ScrollViewer.SetVerticalScrollBarVisibility(comments, ScrollBarVisibility.Auto); card.Children.Add(comments);
             }
             else if (version.Payload == null) card.Children.Add(new TextBlock { Text = "选择此版本会删除该项目。其他版本请先另存副本。", FontSize = 12, TextWrapping = TextWrapping.Wrap });
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };

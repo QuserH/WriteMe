@@ -71,6 +71,10 @@ public sealed class FormattingToolbar : Border
         _clear = ActionButton("Tₓ", "清除文字格式", "FormatClear", () => Apply(null));
         _bar.Children.Add(_highlight);
         _bar.Children.Add(_link);
+        _bar.Children.Add(ActionButton(new SidebarGlyph(SidebarSymbol.Comment, 17), "添加批注 · Ctrl+Alt+M", "FormatComment", () =>
+        {
+            if (ValidTarget() && _owner.IsEffectivelyEnabled && !_owner.InputClient.IsComposing && !PanelIsComposing()) _owner.RequestComment();
+        }));
         _bar.Children.Add(_clear);
         Child = new StackPanel { Children = { _bar, _panel } };
 
@@ -196,7 +200,7 @@ public sealed class FormattingToolbar : Border
         if (rects.Length == 0) { Hide(); return; }
         var first = rects[0];
         var last = rects[^1];
-        Width = Math.Min(366, _owner.Bounds.Width - 16);
+        Width = Math.Min(398, _owner.Bounds.Width - 16);
         MaxHeight = _owner.Bounds.Height - 12;
         IsVisible = true;
         // Measure content independently of the old placement, without repeatedly invalidating

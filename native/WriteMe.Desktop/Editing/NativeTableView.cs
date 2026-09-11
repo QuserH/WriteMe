@@ -179,11 +179,23 @@ internal sealed partial class NativeTableView : NativeLayoutView
                 if (TextColor.Read(node.Marks) is { } color) run.Foreground = Brush.Parse(color);
                 if (node.Marks.FirstOrDefault(mark => mark.Type == "highlight")?.String("color") is { } highlight && Color.TryParse(highlight, out var fill)) run.Background = new SolidColorBrush(fill);
                 if (node.Marks.Any(mark => mark.Type is "underline" or "link" or "noteLink")) run.TextDecorations = TextDecorations.Underline;
+                if (Owner.CommentDecoration(node.Marks) is { } comment)
+                {
+                    run.TextDecorations = new TextDecorationCollection((run.TextDecorations ?? []).Append(comment));
+                    run.Background ??= Owner.PageColor("#FFF6DC", "#473E2C");
+                }
                 text.Inlines.Add(run);
             }
         }
         text.FontWeight = cell.Type == "tableHeader" ? FontWeight.SemiBold : FontWeight.Normal;
         text.TextAlignment = blocks.FirstOrDefault()?.String("textAlign") switch { "center" => TextAlignment.Center, "right" => TextAlignment.Right, "justify" => TextAlignment.Justify, _ => TextAlignment.Left };
+    }
+
+    internal void RefreshComments()
+    {
+        if (Node == null) return;
+        foreach (var cell in Node.Content.SelectMany(row => row.Content))
+            if (cell.Id != _editingCell && _cells.TryGetValue(cell.Id, out var view)) FillPreview(view.Preview, cell);
     }
 
     private void PaintSelection()

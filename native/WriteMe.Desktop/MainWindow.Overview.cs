@@ -62,6 +62,7 @@ public sealed partial class MainWindow
         _overviewRequested = true;
         if (!await SaveAsync() || !_overviewRequested) return;
         _overviewVisible = true; _overviewLimit = 40; _tools.Close(); _tools.IsVisible = false;
+        CloseComments();
         this.FindControl<Grid>("DocumentRegion")!.IsVisible = false; _overview!.IsVisible = true;
         SetDocumentActionsVisible(false);
         RefreshOverview(); UpdateSidebars();
@@ -70,12 +71,12 @@ public sealed partial class MainWindow
     {
         _overviewRequested = _overviewVisible = false;
         if (_overview != null) _overview.IsVisible = false;
-        this.FindControl<Grid>("DocumentRegion")!.IsVisible = true; _tools.IsVisible = true; UpdateSidebars();
+        this.FindControl<Grid>("DocumentRegion")!.IsVisible = true; _tools.IsVisible = !_comments.IsVisible; UpdateSidebars();
         SetDocumentActionsVisible(true);
     }
     private void SetDocumentActionsVisible(bool visible)
     {
-        foreach (var name in new[] { "FavoriteButton", "UndoButton", "RedoButton", "MoreButton" }) this.FindControl<Button>(name)!.IsVisible = visible;
+        foreach (var name in new[] { "FavoriteButton", "UndoButton", "RedoButton", "MoreButton", "CommentsButton" }) this.FindControl<Button>(name)!.IsVisible = visible;
         UpdateHistoryButtons();
     }
     private void RefreshOverview()

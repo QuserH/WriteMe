@@ -86,6 +86,12 @@ internal sealed class BlockStyleTransformer(BlockEditor owner) : DocumentColoriz
                         foreach (var decoration in TextDecorations.Underline) decorations.Add(decoration);
                     if (run.Marks.Any(mark => mark.Type == "strike") || row.IsTask && row.Block.Bool("checked"))
                         foreach (var decoration in TextDecorations.Strikethrough) decorations.Add(decoration);
+                    if (owner.CommentDecoration(run.Marks) is { } comment)
+                    {
+                        decorations.Add(comment);
+                        if (p.BackgroundBrush == null) p.SetBackgroundBrush(owner.PageColor(
+                            owner.ActiveComment is { } id && NoteComments.Ids(run.Marks).Contains(id) ? "#FBE9B4" : "#FFF6DC", "#473E2C"));
+                    }
                     if (decorations.Count > 0) p.SetTextDecorations(decorations);
                 });
             offset += RichText.Length(run);
@@ -182,6 +188,9 @@ internal sealed class BlockBackgroundRenderer(BlockEditor owner) : IBackgroundRe
                 context.DrawRectangle(owner.PageColor("#F5F7FC", "#2D3949"), null, new Rect(left, y + 2, Math.Max(1, textView.Bounds.Width - left), line.Height - 4), 4, 4);
             }
             DrawRow(owner, context, row, y, line.Height, textView.Bounds.Width);
+            if (owner.CommentBlock == row.Node.Id && owner.DropTarget == null)
+                context.DrawRectangle(owner.PageColor("#195F82B2", "#285F82B2"), null,
+                    new Rect(Math.Max(0, x - 5), y + 1, Math.Max(1, textView.Bounds.Width - Math.Max(0, x - 5)), Math.Max(1, line.Height - 2)), 5, 5);
             if (owner.DropTarget is { } drop && drop.IndicatorNode == row.Node.Id)
             {
                 var brush = Ui.Accent;

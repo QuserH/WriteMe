@@ -84,12 +84,12 @@ public static class RichText
         if (length <= 0) return block;
         var total = block.Content.Sum(Length);
         var selectedRuns = Slice(block.Content, start, length);
-        if (selectedRuns.All(run => mark == null ? run.Marks.IsEmpty : remove
+        if (selectedRuns.All(run => mark == null ? run.Marks.All(m => m.Type == NoteComments.MarkType) : remove
                 ? run.Marks.All(m => m.Type != mark.Type)
                 : run.Marks.Any(mark.Equivalent))) return block;
         var selected = selectedRuns.Select(run => run with
         {
-            Marks = mark == null ? [] : remove
+            Marks = mark == null ? run.Marks.Where(m => m.Type == NoteComments.MarkType).ToImmutableArray() : remove
                 ? run.Marks.Where(m => m.Type != mark.Type).ToImmutableArray()
                 : [.. run.Marks.Where(m => m.Type != mark.Type), mark]
         });

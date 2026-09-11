@@ -150,6 +150,7 @@ public sealed partial class BlockEditor : UserControl
         Content = _layout;
 
         InputClient = new(Surface);
+        if (!preview) InitializeParagraphComments();
         if (!preview) BlockCaretGeometry.Attach(Surface);
         Formatting = new(this);
         if (!preview) _layout.Children.Add(Formatting);
@@ -174,6 +175,7 @@ public sealed partial class BlockEditor : UserControl
             if (!OwnsInput(e.Source)) return;
             foreach (var table in _layouts.Values.OfType<NativeTableView>()) table.ClearRangeSelection();
             Activate();
+            CommentPointerPressed(e);
             if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.GetCurrentPoint(Surface).Properties.IsLeftButtonPressed
                 && e.GetPosition(Surface.TextArea.TextView).X >= TextStart(Session.Projection.At(Surface.CaretOffset))
                 && Surface.GetPositionFromPoint(e.GetPosition(Surface)) is { } position
@@ -189,12 +191,13 @@ public sealed partial class BlockEditor : UserControl
         Surface.AddHandler(PointerReleasedEvent, (sender, e) =>
         {
             if (!OwnsInput(e.Source) && _dragSource == null) return;
+            CommentPointerReleased(e);
             DragReleased(sender, e);
             _pointerSelecting = false;
             Formatting.QueueRefresh();
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
         Surface.PointerCaptureLost += (_, _) => { CancelDrag(); _pointerSelecting = false; Formatting.QueueRefresh(); };
-        Surface.PointerExited += (_, _) => { if (_dragSource == null) SetHoveredBlock(null); };
+        Surface.PointerExited += (_, e) => { if (_dragSource == null && !new Rect(Bounds.Size).Contains(e.GetPosition(this))) SetHoveredBlock(null); };
         Surface.LostFocus += (_, _) => { if (!_commands.IsPointerOver) DismissCommands(); };
         Session.Changed += SessionChanged;
         _dragScroll.Tick += (_, _) => ScrollDrag();
@@ -209,6 +212,8 @@ public sealed partial class BlockEditor : UserControl
 
     public void Load(DocumentSession session)
     {
+        _activeComment = null; _commentBlock = null; _commentPress = null;
+        _commentMarkers.Children.Clear(); _commentButtons.Clear();
         ClearLayouts();
         ClearAssetCache();
         References.Reset();
@@ -276,6 +281,7 @@ public sealed partial class BlockEditor : UserControl
 
     private void SessionChanged(object? sender, EventArgs args)
     {
+        RefreshCommentHighlights();
         if (_dragSource != null) CancelDrag();
         if (!_editing && _commands.IsVisible) HideCommands();
         if (_editing)
@@ -498,6 +504,7 @@ public sealed partial class BlockEditor : UserControl
     {
         if (HoveredBlockId == id) return;
         HoveredBlockId = id;
+        QueueCommentMarkers();
         foreach (var grip in Surface.TextArea.TextView.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("blockGrip")))
         {
             var visible = id != null && grip.Tag is Guid key && key == id;
@@ -589,17 +596,20 @@ public sealed partial class BlockEditor : UserControl
         if (row == null) return;
         var session = Session;
         var root = session.Root;
-        MenuItem Item(string label, Action action)
+        MenuItem Item(string label, Action action, bool focusText = true)
         {
             var item = new MenuItem { Header = label };
             item.Click += (_, _) =>
             {
-                if (!IsEnabled || InputClient.IsComposing || !ReferenceEquals(session, Session) || !ReferenceEquals(root, Session.Root)) return;
-                action(); FocusText();
+                if (!IsEffectivelyEnabled || OverlayOwner.IsAnyComposing || !ReferenceEquals(session, Session) || !ReferenceEquals(root, Session.Root)) return;
+                action(); if (focusText) FocusText();
             };
             return item;
         }
         var items = new List<Control>();
+        var comment = Item(Comments.InBlock(row.Node.Id).IsEmpty ? "添加段落评论" : "查看段落评论", () => OpenParagraphComments(row.Node.Id), focusText: false);
+        AutomationProperties.SetAutomationId(comment, "BlockMenuComment");
+        items.Add(comment); items.Add(new Separator());
         if (!row.IsAtomic)
         {
             items.Add(Item(row.IsToggle ? "取消折叠，保留内容" : "转换为折叠块", () => Session.ConvertBlock(row.Start, row.IsToggle ? "paragraph" : "toggleBlock")));

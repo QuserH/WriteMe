@@ -10,7 +10,7 @@ public sealed class SelectionFormats
 {
     private readonly ImmutableArray<NoteNode> _runs;
     public bool CanFormat { get; }
-    public bool HasFormatting => _runs.Any(run => !run.Marks.IsEmpty);
+    public bool HasFormatting => _runs.Any(run => run.Marks.Any(mark => mark.Type != NoteComments.MarkType));
     public MarkCoverage TextColorCoverage
     {
         get
