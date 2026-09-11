@@ -39,6 +39,12 @@
         "resolved": "10.0.12",
         "contentHash": "wO0W8VDMeRJZakRySOmemAnrBZMwEFRlbfBtATxUiLf2I3IhSRnCp1Vt157NWptdE4IJ7eftd5n8q9LtaKHFTQ=="
       },
+      "YDotNet.Native.Win32": {
+        "type": "Direct",
+        "requested": "[0.6.0, )",
+        "resolved": "0.6.0",
+        "contentHash": "J0xznWzlSntF19qvbLxYqUX7xGeitjcBEM4N/bQ8rk57yFR+h6yNXxKQbGCYQsRBh+N7xRe6WMZmwdi5RB7++Q=="
+      },
       "Avalonia": {
         "type": "Transitive",
         "resolved": "11.3.21",
@@ -235,12 +241,18 @@
         "resolved": "0.21.3",
         "contentHash": "hDwB8WsQoyALQKqIbwzS68UKdlnafDm4T/DkO/JrA/YIneP/rKv96SxYPVXeh3FP4i/SXfShrYftKLtciJAIlw=="
       },
+      "YDotNet": {
+        "type": "Transitive",
+        "resolved": "0.6.0",
+        "contentHash": "ipfaBgtyAbBAYuZfWjoNumCgzZPI7/cfhdP0ExFb03hQ3aZoDj5RNFYUtwCq85UnSFcSZpNyYNJlgsoHDkBN7Q=="
+      },
       "writeme.core": {
         "type": "Project",
         "dependencies": {
           "Markdig": "[1.3.2, )",
           "Microsoft.Data.Sqlite": "[10.0.9, )",
-          "SQLitePCLRaw.bundle_e_sqlite3": "[2.1.13, )"
+          "SQLitePCLRaw.bundle_e_sqlite3": "[2.1.13, )",
+          "YDotNet": "[0.6.0, )"
         }
       }
     }

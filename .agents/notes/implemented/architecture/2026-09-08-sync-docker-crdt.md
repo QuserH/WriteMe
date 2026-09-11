@@ -8,6 +8,8 @@ WriteME 需要在完全离线时编辑，并在用户自建服务器上交换多
 
 ## Decision
 
+本记录约束个人资料库的 M6 交换。[共享工作区](2026-09-12-shared-workspaces-and-realtime.md) 在相同服务内另提供 `/team`、独立 `/admin`、成员权限及 Yjs/Yrs 协作；共享入口不自动上传个人库，也不改变下面的整篇冲突语义。
+
 ### 合并模型与持久化
 
 - `SyncProtocol.cs` 实现基于状态的多值寄存器 CRDT，按 `document/<id>`、`space/<id>`、`folder/<id>` 分别保存版本向量和因果前沿。合并去重并删除已被支配的旧版本，保留真正并发版本；规范序列化保证重复交换可比较。合并满足交换、结合与幂等，不用时间戳选择胜者。
@@ -30,9 +32,9 @@ WriteME 需要在完全离线时编辑，并在用户自建服务器上交换多
 ### 服务端与账号
 
 - `native/WriteMe.SyncServer/` 为 ASP.NET Core + SQLite 服务。`SyncServerHost.Build` 可被测试启动真实本机 HTTP 主机；`SyncRepository` 按账号隔离对象、游标读取和附件目录，不信任客户端给出的账号字段。
-- 首次空库通过 `WRITEME_SETUP_USER` / `WRITEME_SETUP_PASSWORD` 创建账号；后续账号使用 `--add-user <name>`，密码从标准输入读取。密码为独立 32 字节盐加 PBKDF2-SHA256（210,000 次），比较用常量时间；随机会话只存 SHA-256 哈希，30 天过期，可退出撤销。
+- 首次空库通过 `WRITEME_SETUP_USER` / `WRITEME_SETUP_PASSWORD` 创建管理员账号；后续账号可以通过独立 `/admin` 页面创建，也保留 `--add-user <name>` 标准输入密码的维护入口。密码为独立 32 字节盐加 PBKDF2-SHA256（210,000 次），比较用常量时间；随机会话只存 SHA-256 哈希，30 天过期，可退出撤销。
 - 登录每来源地址每分钟限制 12 次；请求内容显式验证并限制大小。单批 24 MiB、最多上传 100 个对象；单对象全部并发 payload 总计 16 MiB、最多 32 个版本、每版本向量最多 256 个设备；资产最多 50 MiB。超过界限返回错误并保留本机待处理数据，不能静默丢弃冲突。
-- `sync/Dockerfile` 使用 .NET 10 SDK 构建、ASP.NET 运行镜像和非 root 用户；`sync/compose.yaml` 映射持久卷 `/data`，只绑定宿主回环地址，端口由 `WRITEME_SYNC_PORT` 配置、默认为 8787。`compose.host-build.yaml` 在 Linux 默认构建网络不能访问依赖时仅给构建阶段使用宿主网络，运行服务仍保持隔离网络。外部访问通过 HTTPS 反向代理或 SSH 隧道。具体首次启动、账号、备份与升级见 [同步部署说明](../../../../sync/README.md)。
+- `sync/Dockerfile` 使用 Node 构建网页、.NET 10 SDK 构建服务、ASP.NET 运行镜像和非 root 用户；`sync/compose.yaml` 映射持久卷 `/data`，默认绑定宿主回环地址，局域网共享部署可显式设置 `WRITEME_SYNC_BIND`。端口由 `WRITEME_SYNC_PORT` 配置，默认为 8787。`compose.host-build.yaml` 在 Linux 默认构建网络不能访问依赖时仅给构建阶段使用宿主网络，运行服务仍保持隔离网络。M6 的外部访问继续要求 HTTPS 或 SSH 隧道。具体首次启动、账号、备份与升级见 [同步部署说明](../../../../sync/README.md)。
 - Windows 的 `SyncCredentials.cs` 使用当前用户 DPAPI，附加资料库路径作为熵，保存令牌而不保存密码；非 Windows 不降级为明文持久化。服务器可读取同步内容和文件，不提供端到端加密；账号隔离不等同于不信任服务器。
 
 ## Verification
@@ -58,4 +60,4 @@ WriteME 需要在完全离线时编辑，并在用户自建服务器上交换多
 
 - 收益：断网继续编辑、重试幂等、并发内容保留，账号及附件经过真实接口验证；同步不引入 WebView，也不依赖第三方云。
 - 代价：整篇版本增加网络和磁盘成本，同篇并发需要用户处理；即使只改不同字段也可能冲突。服务器留存因果前沿与墓碑，暂不自动垃圾回收；协议与文档 JSON 必须共同演进。
-- 运行边界：单进程 SQLite 服务，尚无跨实例高可用、账号恢复/密码重置界面、端到端加密和逐字符协作。Docker 已在 Linux ARM64 实测；公网 TLS 与长期运维仍需对应环境验证。更换服务器/账号会将当前整个资料库与新目标合并，空库开始的独立账号应使用独立 `--data-dir`。
+- 运行边界：M6 继续是单进程 SQLite 和整篇交换，尚无跨实例高可用或端到端加密。账号重置与逐字符协作由独立的共享入口提供。Docker 已在 Linux ARM64 实测；公网 TLS 与长期运维仍需对应环境验证。M6 更换服务器/账号会将当前整个资料库与新目标合并，空库开始的独立账号应使用独立 `--data-dir`。

@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace WriteMe.Core;
 
-public sealed record CommentMessage(Guid Id, string Author, string Text, long CreatedAt, long? EditedAt = null, Guid? ReplyTo = null, bool Deleted = false);
+public sealed record CommentMessage(Guid Id, string Author, string Text, long CreatedAt, long? EditedAt = null, Guid? ReplyTo = null, bool Deleted = false, string? AuthorId = null);
 public sealed record CommentThread(Guid Id, string Quote, bool Anchored, ImmutableArray<CommentMessage> Messages, bool WholeBlock = false);
 public sealed record CommentSpan(Guid ThreadId, Guid NodeId, int Start, int Length);
 public sealed record CommentAnchorRange(Guid NodeId, string Path, int Start, int Length, string BlockText);

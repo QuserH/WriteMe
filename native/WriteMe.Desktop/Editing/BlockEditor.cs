@@ -312,6 +312,13 @@ public sealed partial class BlockEditor : UserControl
 
     public void SyncSurface()
     {
+        var readOnly = IsDragPreview || Session.IsReadOnly;
+        if (Surface.IsReadOnly != readOnly)
+        {
+            Surface.IsReadOnly = readOnly;
+            Surface.TextArea.ReadOnlySectionProvider = new AtomicReadOnlyProvider(this);
+            if (readOnly) { InputClient.Cancel(); DismissCommands(); Formatting.Dismiss(); References.Dismiss(); }
+        }
         RefreshLayouts();
         _syncing = true;
         try
@@ -350,6 +357,7 @@ public sealed partial class BlockEditor : UserControl
     private void HandleKey(object? sender, KeyEventArgs e)
     {
         if (!OwnsInput(e.Source)) return;
+        if (Session.IsReadOnly) return; // AvaloniaEdit still handles navigation, selection and copying.
         if (InputClient.IsComposing)
         {
             // Returning alone lets AvaloniaEdit's default Enter/Tab/Delete handler edit the document.
@@ -446,6 +454,7 @@ public sealed partial class BlockEditor : UserControl
 
     internal void BeginBlockDrag(BlockRow row, PointerPressedEventArgs e)
     {
+        if (Session.IsReadOnly) return;
         if (!e.GetCurrentPoint(Surface).Properties.IsLeftButtonPressed || InputClient.IsComposing || !IsEffectivelyEnabled) return;
         DismissCommands(); Formatting.Dismiss(); References.Dismiss();
         var nodeIds = NoteTree.Descendants(row.Block).Select(node => node.Id).ToHashSet();
@@ -635,10 +644,10 @@ public sealed partial class BlockEditor : UserControl
 
     private sealed class AtomicReadOnlyProvider(BlockEditor editor) : IReadOnlySectionProvider
     {
-        public bool CanInsert(int offset) => !editor.Session.Projection.At(offset).IsAtomic;
+        public bool CanInsert(int offset) => !editor.Session.IsReadOnly && !editor.IsDragPreview && !editor.Session.Projection.At(offset).IsAtomic;
         public IEnumerable<ISegment> GetDeletableSegments(ISegment segment)
         {
-            if (editor.Session.Projection.Rows.Any(row => row.IsAtomic && row.End > segment.Offset && row.Start < segment.EndOffset)) return [];
+            if (editor.Session.IsReadOnly || editor.IsDragPreview || editor.Session.Projection.Rows.Any(row => row.IsAtomic && row.End > segment.Offset && row.Start < segment.EndOffset)) return [];
             return [segment];
         }
     }

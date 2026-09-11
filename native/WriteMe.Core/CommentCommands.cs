@@ -34,7 +34,7 @@ public sealed partial class DocumentSession
         foreach (var range in ranges) root = NoteTree.Update(root, range.NodeId, node => anchor!.WholeBlock
             ? NoteComments.WithBlockIds(node, NoteComments.BlockIds(node).Add(id)) : NoteComments.MarkRange(node, range.Start, range.Length, id));
         var quote = anchor?.WholeBlock == true ? NoteComments.BlockQuote(NoteTree.Find(root, ranges[0].NodeId)!) : anchor?.Quote ?? "";
-        var thread = new CommentThread(id, quote, anchor != null, [new(Guid.NewGuid(), "我", text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())], anchor?.WholeBlock == true);
+        var thread = new CommentThread(id, quote, anchor != null, [new(Guid.NewGuid(), owner.CommentAuthor, text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), AuthorId: owner.CommentAccountId)], anchor?.WholeBlock == true);
         owner.BreakTypingGroup();
         owner.Commit(NoteComments.Write(root, index.Threads.Add(thread)));
         return id;
@@ -63,7 +63,7 @@ public sealed partial class DocumentSession
             if (parent == null || parent.Deleted) throw new InvalidOperationException("要回复的消息已删除，草稿已保留。");
             if (NoteComments.For(HistoryOwner.Root).Threads.Sum(item => item.Messages.Length) >= NoteComments.MaxMessages)
                 throw new InvalidOperationException("本篇评论已达到数量上限。");
-            return thread with { Messages = thread.Messages.Add(new(Guid.NewGuid(), "我", text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ReplyTo: parent.Id)) };
+            return thread with { Messages = thread.Messages.Add(new(Guid.NewGuid(), HistoryOwner.CommentAuthor, text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ReplyTo: parent.Id, AuthorId: HistoryOwner.CommentAccountId)) };
         });
     }
 
@@ -73,6 +73,7 @@ public sealed partial class DocumentSession
         ChangeComment(expected, thread =>
         {
             var message = thread.Messages.FirstOrDefault(message => message.Id == messageId) ?? throw new InvalidOperationException("这条评论已删除。");
+            if (!CanEditComment(message)) throw new InvalidOperationException("只能修改自己的评论。");
             if (message.Deleted) throw new InvalidOperationException("这条回复已删除，不能修改。");
             return message.Text == text ? thread : thread with { Messages = thread.Messages.Replace(message, message with { Text = text, EditedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) };
         });
@@ -81,9 +82,14 @@ public sealed partial class DocumentSession
     public void DeleteCommentReply(CommentThread expected, Guid messageId) => ChangeComment(expected, thread =>
     {
         var message = thread.Messages.FirstOrDefault(message => message.Id == messageId) ?? throw new InvalidOperationException("这条回复已删除。");
+        if (!CanDeleteComment(message)) throw new InvalidOperationException("没有删除这条回复的权限。");
         if (thread.Messages[0].Id == messageId) throw new InvalidOperationException("首条评论属于整条讨论，请使用删除讨论。");
         return message.Deleted ? thread : thread with { Messages = thread.Messages.Replace(message, message with { Text = "", Deleted = true, EditedAt = null }) };
     });
 
-    public void DeleteComment(CommentThread expected) => ChangeComment(expected, _ => null);
+    public void DeleteComment(CommentThread expected) => ChangeComment(expected, thread =>
+    {
+        if (!CanDeleteComment(thread.Messages[0])) throw new InvalidOperationException("没有删除这条讨论的权限。");
+        return null;
+    });
 }

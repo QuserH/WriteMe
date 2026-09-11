@@ -20,6 +20,7 @@ public sealed partial class DocumentSession : IDisposable
             throw new ArgumentException("编辑区域必须是表格单元格或分栏", nameof(containerId));
         var session = new DocumentSession(new("doc") { Id = containerId, Content = container.Content })
         { _scopeOwner = this, _scopeId = containerId, Revision = Revision };
+        session._viewRevision = HistoryOwner._viewRevision; session.Projection = session.Project();
         Changed += session.RefreshScope;
         return session;
     }
@@ -33,11 +34,12 @@ public sealed partial class DocumentSession : IDisposable
             Changed?.Invoke(this, EventArgs.Empty);
             return;
         }
-        var changed = Root.Content != container.Content;
+        var changed = Root.Content != container.Content || _viewRevision != HistoryOwner._viewRevision;
+        _viewRevision = HistoryOwner._viewRevision;
         if (changed)
         {
             Root = NoteTree.Normalize(new("doc") { Id = _scopeId, Content = container.Content });
-            Projection = new(Root);
+            Projection = Project();
         }
         var active = _scopeOwner.Selection;
         var selection = NoteTree.Find(Root, active.Anchor.NodeId) != null && NoteTree.Find(Root, active.Caret.NodeId) != null

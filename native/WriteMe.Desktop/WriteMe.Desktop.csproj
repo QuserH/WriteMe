@@ -8,6 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="YDotNet.Native.Win32" Version="0.6.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <ProjectReference Include="../WriteMe.Core/WriteMe.Core.csproj" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.21" />

@@ -10,7 +10,8 @@ public sealed record BlockRow(NoteNode Node, NoteNode Block, int Depth, string M
     public string Text { get; init; } = "";
     public int End => Start + Text.Length;
     public bool IsToggle => Block.Type == "toggleBlock";
-    public bool Collapsed => IsToggle && Block.Bool("collapsed");
+    public bool? ViewCollapsed { get; init; }
+    public bool Collapsed => IsToggle && (ViewCollapsed ?? Block.Bool("collapsed"));
     public bool IsExpanded => IsToggle && !Collapsed && Block.Content.Length > 1;
     public ImmutableArray<int> GuideDepths { get; init; } = [];
     public bool IsAtomic => !Node.IsTextBlock;
@@ -26,7 +27,7 @@ public sealed class DocumentProjection
     private readonly Dictionary<Guid, BlockRow> _byNode;
     private readonly Dictionary<Guid, BlockRow> _layoutHosts = [];
 
-    public DocumentProjection(NoteNode root)
+    public DocumentProjection(NoteNode root, IReadOnlyDictionary<Guid, bool>? viewCollapsed = null)
     {
         var rows = ImmutableArray.CreateBuilder<BlockRow>();
         var text = new StringBuilder();
@@ -34,7 +35,8 @@ public sealed class DocumentProjection
         {
             if (rows.Count > 0) text.Append('\n');
             var value = node.IsTextBlock ? RichText.Plain(node) : node.Type is "horizontalRule" or "image" or "attachment" or "table" or "columnList" ? "\uFFFC" : $"[保留的 {node.Type} 内容]";
-            rows.Add(new(node, owner, depth, marker, quote) { Start = text.Length, Index = rows.Count, Text = value, GuideDepths = guides });
+            rows.Add(new(node, owner, depth, marker, quote) { Start = text.Length, Index = rows.Count, Text = value, GuideDepths = guides,
+                ViewCollapsed = viewCollapsed != null && viewCollapsed.TryGetValue(owner.Id, out var collapsed) ? collapsed : null });
             text.Append(value);
         }
         void Walk(NoteNode node, int depth, ImmutableArray<int> guides, bool quote = false, NoteNode? owner = null, string marker = "")
@@ -43,7 +45,7 @@ public sealed class DocumentProjection
             if (node.Type == "toggleBlock")
             {
                 Add(node.Content[0], node, depth, guides, "", quote);
-                if (!node.Bool("collapsed"))
+                if (!(viewCollapsed?.GetValueOrDefault(node.Id, node.Bool("collapsed")) ?? node.Bool("collapsed")))
                 {
                     var childGuides = guides.Add(depth);
                     foreach (var child in node.Content.Skip(1)) Walk(child, depth + 1, childGuides, quote);

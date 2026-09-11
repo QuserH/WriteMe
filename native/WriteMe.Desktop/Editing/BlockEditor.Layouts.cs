@@ -216,6 +216,7 @@ public sealed partial class BlockEditor
 
     private void HandleAtomicText(object? sender, TextInputEventArgs e)
     {
+        if (OwnsInput(e.Source) && Session.IsReadOnly) { e.Handled = true; return; }
         if (!OwnsInput(e.Source) || !IsEnabled || e.Text is not { Length: > 0 } text || Surface.Document.TextLength != Session.Projection.Text.Length) return;
         // TextInput carries committed text. The table range command must see the end of
         // composition before it decides whether a structural replacement is permitted.

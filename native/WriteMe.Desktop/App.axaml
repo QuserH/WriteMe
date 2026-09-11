@@ -2,6 +2,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="WriteMe.Desktop.App" RequestedThemeVariant="Light">
   <Application.Styles>
+    <Style Selector="Button.windowCaption">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome747A84}" />
+    </Style>
+    <Style Selector="Button.windowCaption:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeECEEF0}" />
+    </Style>
+    <Style Selector="Button.windowClose:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#D94B50" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
     <FluentTheme />
     <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     <Style Selector="Window">
@@ -37,7 +51,7 @@
     </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource Chrome30302F}" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Foreground" Value="{DynamicResource ChromeFFFFFF}" />
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Padding" Value="15,9" />
     </Style>

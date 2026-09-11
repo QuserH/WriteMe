@@ -103,6 +103,16 @@ public sealed partial class DocumentSession
     public bool Reveal(Guid nodeId)
     {
         if (NoteTree.Find(Root, nodeId) is not { } target || !target.IsTextBlock && target.Type is not ("image" or "attachment")) return false;
+        if (IsReadOnly)
+        {
+            var folds = new List<(Guid, bool)>(); var parent = NoteTree.Parent(Root, nodeId);
+            while (parent != null)
+            {
+                if (parent.Type == "toggleBlock" && parent.Content[0].Id != nodeId) folds.Add((parent.Id, false));
+                parent = NoteTree.Parent(Root, parent.Id);
+            }
+            ViewFolds(folds, EditorSelection.At(nodeId)); return true;
+        }
         var root = Root;
         var ancestor = NoteTree.Parent(Root, nodeId);
         while (ancestor != null)

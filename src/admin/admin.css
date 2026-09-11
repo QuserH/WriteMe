@@ -1,0 +1,39 @@
+.admin-app { min-height:100vh; background:#fff; }
+.admin-header { height:68px; padding:0 4%; border-bottom:1px solid #eceef2; display:flex; align-items:center; gap:22px; }
+.admin-header-label { border-left:1px solid #e6e9ee; padding-left:22px; font-size:14px; color:#687385; }
+.admin-header-actions { display:flex; align-items:center; gap:12px; margin-left:auto; font-size:13px; }
+.admin-header-actions a { text-decoration:none; margin-right:14px; }
+.admin-app .shared-admin { max-width:1100px; margin:auto; padding:54px 36px; }
+.admin-app .shared-admin h1 { color:#1a1c1e; font-weight:600; font-size:30px; margin:12px 0; }
+.admin-app .shared-admin-heading p { font-size:14px; color:#848e9d; }
+.admin-app .shared-admin-heading>.shared-primary { font-size:14px; }
+.admin-app .shared-admin-stats { gap:22px; margin:36px 0; }
+.admin-app .shared-admin-stats>div { padding:24px; background:#fcfdff; border:1px solid #e9edf3; border-radius:14px; }
+.admin-app .shared-admin-stats span { font-size:13px; color:#7d889a; }
+.admin-app .shared-admin-stats b { font-size:32px; color:#303b50; }
+.admin-app .shared-table-heading { padding:24px; }
+.admin-app .shared-table-heading h3 { font-size:16px; color:#303b50; }
+.admin-app .shared-table-heading>span { font-size:12px; }
+.admin-app .shared-account-table { border-radius:14px; border-color:#e9edf3; }
+.admin-app .shared-account-table th { font-size:12px; padding:14px 24px; background:#fafbfd; color:#8190a3; }
+.admin-app .shared-account-table td { font-size:13px; padding:8px 24px; color:#526177; }
+.admin-app .shared-member b { font-size:14px; }
+.admin-app .shared-member small { font-size:12px; }
+.admin-app .shared-row-actions button { font-size:12px; color:#3c71c8; padding:8px 0; }
+.admin-app .shared-state-pill { font-size:11px; color:#597ec2; background:#eef3fc; }
+.admin-app .shared-state-pill.disabled { color:#9a7c71; background:#f8f1ee; }
+.admin-access { max-width:460px; margin:100px auto; padding:24px; }
+.admin-access h1 { font-size:25px; margin-bottom:16px; }
+.admin-access p { line-height:1.8; color:#7b8493; margin-bottom:28px; }
+.admin-access a { text-decoration:none; }
+@media(max-width:650px) {
+  .admin-header { padding:0 18px; gap:12px; }
+  .admin-header-label { font-size:12px; padding-left:12px; }
+  .admin-header-actions>span,.admin-header-actions .shared-avatar { display:none; }
+  .admin-header-actions a { font-size:11px; padding:7px; margin:0; }
+  .admin-app .shared-admin { padding:30px 18px; }
+  .admin-app .shared-admin h1 { font-size:25px; }
+  .admin-app .shared-admin-heading p { font-size:12px; }
+  .admin-app .shared-admin-stats { gap:9px; }
+  .admin-app .shared-admin-stats>div { padding:18px 12px; }
+}

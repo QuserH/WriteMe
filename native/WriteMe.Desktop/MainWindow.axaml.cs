@@ -59,6 +59,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(string dataDirectory, bool importLegacy)
     {
         AvaloniaXamlLoader.Load(this);
+        WindowChrome.Attach(this, this.FindControl<Grid>("WindowHeader")!, this.FindControl<StackPanel>("WindowCaptionButtons")!, this.FindControl<Border>("WindowFrame")!);
         _store = new(dataDirectory, importLegacy ? NoteStore.LegacyPath : null);
         if (_store.List().Count == 0) _store.Create("欢迎使用 WriteME", WelcomeDocument.Create());
         _active = _store.Get(_store.List()[0].Id);
@@ -179,6 +180,11 @@ public sealed partial class MainWindow : Window
         ShowActive();
         UpdateSidebars();
         InitializeSyncUi();
+        this.FindControl<Button>("WorkspaceButton")!.Click += async (_, _) => await RunUiAsync(async () =>
+        {
+            if (!await SaveAsync()) return;
+            var shared = new SharedWorkspaceWindow(_store); await shared.ShowDialog(this);
+        });
         if (_store.ImportedLegacy) _status.Text = "已导入旧版笔记副本 · 后续修改保存在原生版资料库";
     }
 

@@ -47,10 +47,14 @@ internal static class Program
             store.Save(document.Id, "WriteME 安装检查完成", root);
             if (store.Query(new(Text: "中文保存")).Count != 1 || store.Tags().Count != 1 || store.SyncState("document/" + document.Id) == null)
                 throw new InvalidOperationException("本地存储检查失败");
+            using var shared = new SharedDocumentReplica(); shared.Write(root, "共享安装检查", false);
+            using var peer = new SharedEditingSession(new(shared.State()), "安装检查", "smoke-test");
+            peer.Session.Edit(0, 0, "共享🙂", false); shared.Apply(peer.Replica.State());
+            if (!DocumentText.Plain(shared.Read().Root).Contains("共享🙂")) throw new InvalidOperationException("共享原生运行库检查失败");
             File.WriteAllText(Path.Combine(DataDirectory, "smoke-test.json"), JsonSerializer.Serialize(new
             {
                 status = "ok", runtime = Environment.Version.ToString(), sqlite = true, fullTextSearch = true,
-                documentTransactions = true, webView = false, directory = DataDirectory
+                documentTransactions = true, sharedReplica = true, webView = false, directory = DataDirectory
             }, new JsonSerializerOptions { WriteIndented = true }));
         }
         return 0;

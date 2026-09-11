@@ -159,9 +159,10 @@ public sealed class CommentsPane : Border
         button.Click += (_, _) => action(); return button;
     }
 
-    private bool CanEdit => _session != null && _session == _editor.Session.HistoryOwner && _session.IsScopeAttached && _editor.IsEffectivelyEnabled && IsEffectivelyEnabled
+    private bool CanRead => _session != null && _session == _editor.Session.HistoryOwner && _session.IsScopeAttached && _editor.IsEffectivelyEnabled && IsEffectivelyEnabled
         && !_editor.IsAnyComposing && NoteComments.For(_session.Root).CanEdit;
-    private bool Current(DocumentSession? expected) => expected != null && expected == _session && CanEdit && IsEffectivelyVisible && !IsComposing;
+    private bool CanEdit => CanRead && !_session!.IsReadOnly;
+    private bool Current(DocumentSession? expected, bool writing = true) => expected != null && expected == _session && (writing ? CanEdit : CanRead) && IsEffectivelyVisible && !IsComposing;
 
     public void Bind(string documentId, DocumentSession session)
     {
@@ -237,7 +238,7 @@ public sealed class CommentsPane : Border
             var quote = Button(new TextBlock { Text = (thread.WholeBlock ? "段落 · " : "") + thread.Quote.Replace('\n', ' '), FontSize = 11, TextWrapping = TextWrapping.Wrap, MaxLines = expanded ? 3 : 2, TextTrimming = TextTrimming.CharacterEllipsis },
                 missing ? "原文已删除" : thread.WholeBlock ? "定位评论段落" : "定位批注原文", "CommentQuote_" + thread.Id, () =>
                 {
-                    if (!Current(session)) return;
+                    if (!Current(session, false)) return;
                     ShowThread(thread.Id);
                     if (NoteComments.For(session!.Root).Spans(thread.Id).FirstOrDefault() is { } span)
                     { _editor.NavigateTo(span.NodeId, span.Start, thread.WholeBlock ? 0 : span.Length); _editor.SelectCommentBlock(thread.WholeBlock ? span.NodeId : null); _editor.ActiveEditor.Formatting.Dismiss(); }
@@ -272,8 +273,8 @@ public sealed class CommentsPane : Border
                 repliesBody.Children.Add(messageFrame); continue;
             }
             var head = new Grid { ColumnDefinitions = new("*,Auto") };
-            var avatar = new Border { Width = 26, Height = 26, CornerRadius = new(13), Background = Ui.Chrome("#E6F0E8"), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left,
-                Child = new TextBlock { Text = StringInfo.GetNextTextElement(message.Author), FontSize = 10, Foreground = Ui.Chrome("#52785B"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+            var avatar = new Border { Width = 26, Height = 26, CornerRadius = new(13), Background = Ui.Chrome("#EFF2F6"), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left,
+                Child = new TextBlock { Text = StringInfo.GetNextTextElement(message.Author), FontSize = 10, Foreground = Ui.Chrome("#5B6573"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
             messageLayout.Children.Add(avatar);
             var byline = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
             byline.Children.Add(new TextBlock { Text = message.Author, FontSize = 12, FontWeight = FontWeight.Medium });
@@ -286,16 +287,17 @@ public sealed class CommentsPane : Border
                 var edit = new MenuItem { Header = "编辑评论" }; edit.Click += (_, _) => { if (Current(session)) BeginEdit(thread, message); };
                 var delete = new MenuItem { Header = message.Id == thread.Messages[0].Id ? "删除讨论及回复…" : "删除这条回复…" };
                 delete.Click += (_, _) => { if (!Current(session)) return; _delete = (thread, message.Id == thread.Messages[0].Id ? null : message.Id); _selected = thread.Id; Refresh(true); };
-                menuButton!.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete } };
+                menuButton!.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete }.Where(item => item == edit ? session!.CanEditComment(message) : session!.CanDeleteComment(message)).ToArray() };
                 menuButton.ContextMenu.Open(menuButton);
             });
             menuButton.MinHeight = 22; menuButton.Padding = new(5, 3); menuButton.Classes.Add("commentMore");
+            menuButton.IsVisible = session!.CanEditComment(message) || session.CanDeleteComment(message);
             Grid.SetColumn(menuButton, 1); head.Children.Add(menuButton); messageBody.Children.Add(head);
             if (parent != null)
             {
                 var target = Button(new TextBlock { Text = $"回复 {parent.Author} · {(parent.Deleted ? "这条回复已删除" : NoteComments.Abbreviate(parent.Text.Replace('\n', ' '), 60))}",
                     FontSize = 10, Foreground = Ui.Muted, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis },
-                    "查看这条消息回复的原消息", "CommentParent_" + message.Id, () => { if (Current(session)) ShowMessage(thread.Id, parent.Id); });
+                    "查看这条消息回复的原消息", "CommentParent_" + message.Id, () => { if (Current(session, false)) ShowMessage(thread.Id, parent.Id); });
                 target.Padding = new(0); target.MinHeight = 16; target.HorizontalContentAlignment = HorizontalAlignment.Left;
                 messageBody.Children.Add(target);
             }
@@ -303,6 +305,7 @@ public sealed class CommentsPane : Border
             var reply = Button("回复", "回复这条消息", isReply ? "CommentReplyMessage_" + message.Id : "CommentReply_" + thread.Id,
                 () => { if (Current(session)) BeginReply(thread, message); });
             reply.HorizontalAlignment = HorizontalAlignment.Left; reply.Padding = new(0, 2); reply.MinHeight = 20; reply.Foreground = Ui.Chrome("#5477A5");
+            reply.IsVisible = CanEdit;
             messageBody.Children.Add(reply);
             if (isReply) repliesBody.Children.Add(messageFrame); else body.Children.Add(messageFrame);
             if (expanded && message.Id == thread.Messages[0].Id && thread.Messages.Length > replyLimit + 1)
@@ -322,7 +325,7 @@ public sealed class CommentsPane : Border
             confirm.Children.Add(Button("取消", "取消删除", "CommentCancelDelete", () => { _delete = null; Refresh(true); })); body.Children.Add(confirm);
         }
         else if (!expanded && (thread.Messages.Length > 1 || thread.Messages[0].Text.Length > 240))
-            body.Children.Add(Button(thread.Messages.Length > 1 ? $"查看 {thread.Messages.Count(message => !message.Deleted) - 1} 条回复" : "展开评论", "显示完整评论和回复", "CommentExpand_" + thread.Id, () => { if (Current(session)) ShowThread(thread.Id); }));
+            body.Children.Add(Button(thread.Messages.Length > 1 ? $"查看 {thread.Messages.Count(message => !message.Deleted) - 1} 条回复" : "展开评论", "显示完整评论和回复", "CommentExpand_" + thread.Id, () => { if (Current(session, false)) ShowThread(thread.Id); }));
         return card;
     }
 
@@ -367,7 +370,7 @@ public sealed class CommentsPane : Border
 
     public void ShowParagraph(CommentAnchor anchor)
     {
-        if (!CanEdit || IsComposing || !anchor.WholeBlock || NoteComments.Resolve(_session!.Root, anchor).FirstOrDefault() is not { } range) return;
+        if (!CanRead || IsComposing || !anchor.WholeBlock || NoteComments.Resolve(_session!.Root, anchor).FirstOrDefault() is not { } range) return;
         ContextAnchor = anchor; _selected = null; _delete = null; _limit = 30; _hasList = false;
         var threads = NoteComments.For(_session.Root).InBlock(range.NodeId);
         var threadIds = threads.Select(thread => thread.Id).ToHashSet();
@@ -386,6 +389,7 @@ public sealed class CommentsPane : Border
 
     private void BeginReply(CommentThread thread, CommentMessage? target = null)
     {
+        if (!CanEdit) return;
         target ??= thread.Messages[0];
         if (target.Deleted) return;
         ShowThread(thread.Id); ChooseDraft($"reply:{thread.Id}:{target.Id}"); _draft.Thread = thread; _draft.Message = null; _draft.ReplyTo = target.Id;

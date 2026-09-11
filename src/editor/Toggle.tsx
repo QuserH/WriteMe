@@ -58,7 +58,7 @@ export const ToggleBlock = Node.create({
   },
 
   addKeyboardShortcuts() {
-    const run = (command: Command) => !this.editor.view.composing &&
+    const run = (command: Command) => this.editor.isEditable && !this.editor.view.composing &&
       command(this.editor.state, this.editor.view.dispatch, this.editor.view);
     const inList = () => this.editor.isActive("listItem") || this.editor.isActive("taskItem");
     return {
@@ -84,6 +84,7 @@ export const ToggleBlock = Node.create({
   addProseMirrorPlugins() {
     return [new Plugin({
       appendTransaction: (transactions, _old, state) => {
+        if (!this.editor.isEditable) return null;
         if (!transactions.some((tr) => tr.selectionSet || tr.docChanged) || !state.selection.empty) return null;
         const pos = collapsedSelectionPosition(state);
         return pos === null ? null : state.tr.setSelection(TextSelection.create(state.doc, pos));
@@ -94,6 +95,7 @@ export const ToggleBlock = Node.create({
   addNodeView() {
     return ({ node, editor, getPos }) => {
       let current = node;
+      let viewCollapsed: boolean | undefined;
       const dom = document.createElement("div");
       dom.className = "wm-toggle";
       dom.dataset.type = "toggle-block";
@@ -109,7 +111,7 @@ export const ToggleBlock = Node.create({
       dom.append(button, contentDOM);
 
       const update = () => {
-        const collapsed = !!current.attrs.collapsed;
+        const collapsed = !editor.isEditable && viewCollapsed !== undefined ? viewCollapsed : !!current.attrs.collapsed;
         dom.dataset.collapsed = String(collapsed);
         dom.dataset.empty = String(!current.firstChild?.content.size);
         dom.dataset.hasChildren = String(current.childCount > 1);
@@ -122,8 +124,16 @@ export const ToggleBlock = Node.create({
       const onClick = (event: MouseEvent) => {
         event.preventDefault();
         const pos = getPos();
-        if (typeof pos !== "number" || !editor.isEditable) return;
+        if (typeof pos !== "number") return;
         const { state } = editor;
+        if (!editor.isEditable) {
+          viewCollapsed = !(viewCollapsed ?? !!current.attrs.collapsed); update();
+          const titleEnd = pos + 2 + (current.firstChild?.content.size ?? 0);
+          if (viewCollapsed && state.selection.to > titleEnd && state.selection.from < pos + current.nodeSize)
+            editor.view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, titleEnd)));
+          return;
+        }
+        viewCollapsed = undefined;
         const collapsed = !current.attrs.collapsed;
         const tr = state.tr.setNodeAttribute(pos, "collapsed", collapsed);
         const titleEnd = pos + 2 + (current.firstChild?.content.size ?? 0);
@@ -140,6 +150,7 @@ export const ToggleBlock = Node.create({
         contentDOM,
         update(next) {
           if (next.type !== current.type) return false;
+          if (next.attrs.writemeId !== current.attrs.writemeId) viewCollapsed = undefined;
           current = next;
           update();
           return true;

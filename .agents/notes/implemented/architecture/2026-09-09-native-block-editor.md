@@ -16,6 +16,8 @@ Status: implemented
 
 ### 技术选择与代码边界
 
+[共享工作区](2026-09-12-shared-workspaces-and-realtime.md) 复用原生编辑表面并接入 Yrs 的协作历史；网页仍独立运行。共享窗口与主窗口使用统一的原生标题栏，后台仅在 `/admin` 网页中提供。
+
 - 使用 **C# / .NET 10 + Avalonia + AvaloniaEdit + SQLite**。Avalonia 负责中文桌面界面与本机绘制，AvaloniaEdit 提供文字输入、排版、选区、滚动及视口虚拟化；核心路径不装配 WebView2、Electron 或浏览器 DOM。这里的原生指无浏览器的本机绘制，界面并非全部 Windows 系统控件，C# 核心仍由 .NET 托管运行。
 - `native/WriteMe.Core/` 实现文档树、富文本、编辑与结构事务、历史和 SQLite；`native/WriteMe.Desktop/` 装配 Craft 风格侧栏、标题、工具栏与原生编辑表面；`native/WriteMe.Tests/` 覆盖模型、存储及 Avalonia 指针/键盘路径。无需在当前五个 CRUD 操作之外增加 Rust/C# 互操作层。
 - Avalonia 允许共享桌面及未来移动端的 C# 模型和部分界面。与 Qt 相比，本次选择使文档事务、存储与交互处于同一套托管类型系统，复用 AvaloniaEdit 的现成文字设施，避免同时引入 C++/QML 与另一套核心桥接。此选择基于实现边界和已运行的 Windows 原型，不宣称 C# 的运行占用必然更低，也不把框架支持平台等同于应用已通过跨平台验收。

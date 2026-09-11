@@ -4,15 +4,18 @@
         xmlns:editing="using:WriteMe.Desktop.Editing"
         x:Class="WriteMe.Desktop.MainWindow"
         Title="WriteME · 原生版" Width="1180" Height="820" MinWidth="780" MinHeight="560"
-        WindowStartupLocation="CenterScreen" Icon="/Assets/icon.ico">
+        WindowStartupLocation="CenterScreen" Icon="/Assets/icon.ico"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaChromeHints="NoChrome" ExtendClientAreaTitleBarHeightHint="0">
+  <Border x:Name="WindowFrame" BorderBrush="{DynamicResource ChromeE6E8ED}" BorderThickness="1" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource ChromeFCFDFE}">
   <Grid x:Name="Shell" ColumnDefinitions="292,*" RowDefinitions="56,*" Background="{DynamicResource ChromeFCFDFE}">
-    <Grid Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" Margin="18,4,20,0">
+    <Grid x:Name="WindowHeader" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="18,0,0,0">
       <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
         <TextBlock Text="WriteME" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Chrome41464C}" VerticalAlignment="Center" />
         <Button x:Name="SidebarButton" Classes="quiet" ToolTip.Tip="显示或隐藏侧栏" AutomationProperties.Name="显示或隐藏侧栏" />
       </StackPanel>
       <TextBlock x:Name="NavigationTitle" Grid.Column="1" Foreground="{DynamicResource Chrome7B7D82}" FontSize="13" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="400" />
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+        <Button x:Name="WorkspaceButton" Classes="quiet" Content="工作区" FontSize="12" ToolTip.Tip="登录与共享工作区" AutomationProperties.Name="登录与共享工作区" AutomationProperties.AutomationId="WorkspaceButton" />
         <Button x:Name="SyncButton" Classes="quiet" Content="同步" FontSize="11" AutomationProperties.Name="资料库同步" AutomationProperties.AutomationId="SyncButton" />
         <Button x:Name="CommentsButton" Classes="quiet" AutomationProperties.Name="查看评论" AutomationProperties.AutomationId="CommentsButton" />
         <Button x:Name="FavoriteButton" Classes="quiet" Content="☆" FontSize="19" ToolTip.Tip="收藏文档" AutomationProperties.Name="收藏文档" AutomationProperties.AutomationId="FavoriteDocument" Focusable="False" />
@@ -20,13 +23,14 @@
         <Button x:Name="RedoButton" Classes="quiet" Content="↷" FontSize="18" ToolTip.Tip="重做 · Ctrl+Shift+Z" AutomationProperties.Name="重做" Focusable="False" />
         <Button x:Name="MoreButton" Classes="quiet" Content="⋯" FontSize="18" AutomationProperties.Name="文档菜单" />
       </StackPanel>
+      <StackPanel x:Name="WindowCaptionButtons" Grid.Column="3" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Top" />
     </Grid>
     <Border x:Name="LibrarySidebar" Grid.Row="1" Background="{DynamicResource ChromeFCFDFE}" ClipToBounds="True">
       <Grid RowDefinitions="*,Auto">
         <Grid x:Name="LeftPaneHost">
       <Grid x:Name="SpacePane" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
         <Grid Margin="20,14,14,10" ColumnDefinitions="26,*,Auto">
-          <Border Background="{DynamicResource Chrome619786}" CornerRadius="6" Width="23" Height="23">
+          <Border Background="{DynamicResource Chrome4A78C5}" CornerRadius="6" Width="23" Height="23">
             <TextBlock Text="W" Foreground="White" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <Button x:Name="SpaceSwitchButton" Grid.Column="1" Classes="quiet" Content="我的空间⌄" HorizontalContentAlignment="Left" FontSize="14" FontWeight="SemiBold" AutomationProperties.Name="切换空间" />
@@ -75,8 +79,8 @@
       </Grid>
     </Border>
     <Grid x:Name="DocumentRegion" Grid.Column="1" Grid.Row="1" RowDefinitions="Auto,*,42">
-      <Border x:Name="PageBackground" Grid.RowSpan="3" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeEDEEEF}" BorderThickness="1" CornerRadius="26" Margin="6,0,12,12"
-              BoxShadow="0 1 1 -0.5 #0F000000, 0 3 3 -1.5 #0F000000, 0 6 6 -3 #0F000000, 0 12 12 -6 #0A000000, 0 24 24 -12 #08000000" />
+      <Border x:Name="PageBackground" Grid.RowSpan="3" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeEDEEEF}" BorderThickness="1" CornerRadius="16" Margin="6,0,12,12"
+              BoxShadow="0 2 8 -4 #12000000" />
       <Grid x:Name="TitleRegion" MaxWidth="900" HorizontalAlignment="Stretch" Margin="32,58,88,8">
         <StackPanel Margin="48,0,8,0">
           <Border x:Name="CoverFrame" IsVisible="False" Height="170" Margin="0,-35,0,22" CornerRadius="14" ClipToBounds="True" Background="{DynamicResource ChromeF0F2F5}">
@@ -103,4 +107,5 @@
       </StackPanel>
     </Border>
   </Grid>
+  </Border>
 </Window>

@@ -27,10 +27,10 @@ public sealed class SyncTests
         public WebApplication App { get; }
         public Uri Endpoint { get; private set; } = null!;
         public SyncRepository Repository => App.Services.GetRequiredService<SyncRepository>();
-        private Host(string path) => App = SyncServerHost.Build(new(path, "owner", Password, Quiet: true));
-        public static async Task<Host> Start(string path)
+        private Host(string path, string? webRoot) => App = SyncServerHost.Build(new(path, "owner", Password, Quiet: true, WebRoot: webRoot));
+        public static async Task<Host> Start(string path, string? webRoot = null)
         {
-            var host = new Host(path); await host.App.StartAsync();
+            var host = new Host(path, webRoot); await host.App.StartAsync();
             host.Endpoint = new(host.App.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single() + "/"); return host;
         }
         public async Task<SyncClient> Client(string username = "owner", string password = Password) => new(Endpoint, await SyncClient.LoginAsync(Endpoint.AbsoluteUri, username, password));

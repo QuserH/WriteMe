@@ -10,7 +10,9 @@ WriteME：类 Craft 的中文笔记应用。Windows 桌面优先（后续可能�
 **离线优先本地存储**，M3–M6 的原生功能及自建同步服务已实现。界面语言为中文。
 Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、可搜索斜杠菜单与选区格式工具栏已实现。当前主开发路线转为 C# 原生版，原生编辑基础已构建、发布并在 Windows 验证。
 
-**用户约束（2026-09-09）**：核心编辑不采用 WebView，原生实现与运行占用优先。用户已认可 C# 并授权完成后续里程碑；先读 [原生块编辑器](.agents/notes/implemented/architecture/2026-09-09-native-block-editor.md)。已落地 .NET 10 + Avalonia + AvaloniaEdit + SQLite，核心文档事务由 C# 承担。不能宣称完整 Craft 功能、所有 Web 行为、逐字符实时协作或跨平台迁移已完成。
+**用户约束（2026-09-09）**：核心编辑不采用 WebView，原生实现与运行占用优先。用户已认可 C# 并授权完成后续里程碑；先读 [原生块编辑器](.agents/notes/implemented/architecture/2026-09-09-native-block-editor.md)。已落地 .NET 10 + Avalonia + AvaloniaEdit + SQLite，核心文档事务由 C# 承担。共享工作区另通过 Yjs/Yrs 实现双端文字与逐条评论协作，见 [共享架构](.agents/notes/implemented/architecture/2026-09-12-shared-workspaces-and-realtime.md)；不能宣称完整 Craft、所有 Web 行为或跨平台迁移完成。
+
+**用户约束（2026-09-12）**：使用 Craft 的冷白、白纸、深色文字与蓝色反馈，不用绿色主题或大块灰色登录插画。后台必须是独立 `/admin` 网页，不能嵌在 `/team` 笔记界面或 EXE 内。部署先服务同一局域网；个人资料不自动迁入共享工作区。
 
 ## 技术栈与代码地图
 
@@ -32,10 +34,13 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 页面与文件 | 外观/封面、主题、资产、每日笔记、本地版本、Markdown 与 ZIP | `native/WriteMe.Core/WorkspaceStore.cs` / `NoteMarkdown.cs` / `LibraryBackup.cs`，UI 在 `MainWindow.Appearance.cs` / `MainWindow.Files.cs` / `PresentationWindow.cs` |
 | 同步核心/客户端 | 版本向量、多值寄存器、HTTP 与附件传输、Windows DPAPI | `native/WriteMe.Core/SyncProtocol.cs` / `SyncStore.cs` / `SyncClient.cs`，UI 在 `MainWindow.Sync.cs` / `SyncCredentials.cs` |
 | 自建服务 | ASP.NET Core、账号隔离 SQLite、会话哈希、Docker | `native/WriteMe.SyncServer/`、`sync/`，部署见 `sync/README.md` |
+| 共享工作区 | 账号、成员权限、稳定块 CRDT、逐条评论、WebSocket、草稿 | Core `SharedDocumentReplica.cs` / `SharedEditingSession.cs` / `SharedClient.cs`，Server `SharedRepository.cs` / `SharedHub.cs`，Desktop `SharedWorkspaceWindow*.cs` |
+| 共享网页与后台 | `/team` 写作，独立 `/admin` 账号管理；Yjs 与 IndexedDB | `src/shared/` / `src/admin/`；Docker 构建前端到服务端 `wwwroot` |
+| 原生窗口边界 | 应用顶栏合并窗口控制、拖动/最大化、关闭保存 | `native/WriteMe.Desktop/WindowChrome.cs` / `MainWindow.axaml` |
 | 折叠排版 | 矢量三角、28px 标记列/缩进、长标题续行与选区坐标 | `native/WriteMe.Desktop/Editing/ToggleDisclosureButton.cs` / `BlockRendering.cs` / `BlockTextFormatter.cs` |
 | 文档核心 | 不可变文档树、TipTap JSON、可见投影、富文本、统一历史、结构移动 | `native/WriteMe.Core/` |
 | 本地存储 | Microsoft.Data.Sqlite，独立原生库及旧库在线备份导入 | `native/WriteMe.Core/NoteStore.cs` |
-| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 265 项，含真实 HTTP | `native/WriteMe.Tests/` |
+| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 290 项，含真实 HTTP/WebSocket 与 Chromium 联动 | `native/WriteMe.Tests/` |
 | 发布 | 自带 .NET 运行时的 Windows 目录；最近成功版本清单 | `scripts/Publish-Native.ps1` / `Start-Native.ps1` → `artifacts/native/` |
 
 ### 保留的 Web / Tauri 基线
@@ -63,6 +68,7 @@ npm run native:app          # 启动最近成功发布的 WriteME.Native.exe
 npm run dev                 # 浏览器演示模式（数据在 localStorage）
 npm run build               # tsc 类型检查 + vite 打包到 dist/
 npm run test:editor         # 折叠/拖拽/搜索/文字格式/保存与迁移回归（首次先 npx playwright install chromium）
+npm run test:shared         # /admin 独立后台、双浏览器账号、评论与离线恢复
 npm run tauri dev           # 旧 Tauri 开发模式（热重载，勿频繁重启）
 npm run release             # 旧版前端打包 + Tauri release + 复制根目录 WriteME.exe
 npm run app                 # 启动旧 Tauri release 版
@@ -89,6 +95,7 @@ npm run init-board          # 生成决策看板 board.html
 - 原生默认资料库为 `%APPDATA%\com.writeme.native\writeme.db`。首次运行使用 SQLite 在线备份从旧库导入副本，旧库不回写；禁止直接复制活跃 WAL 数据库作为迁移方案。`--data-dir` 使用独立测试库且不导入旧库，真实 UI 验证应使用隔离库。
 - .NET restore/build/test/publish 不要并行操作共享项目的 `obj`；包锁文件入库。SQLitePCLRaw 固定 `2.1.13`，不能为消除旧依赖漏洞告警而关闭安全检查。
 - 普通开发使用 `packages.lock.json`，显式 RID 发布使用 `packages.<RID>.lock.json`；Desktop 和 Core 的 `win-x64` 发布锁都入库，发布脚本开启锁模式。新增平台或升级包时同步审核对应锁文件，发布后普通锁定还原仍须可用。
+- 更新发布锁使用 `dotnet restore ... -p:RuntimeIdentifier=win-x64 --force-evaluate`。单独 `dotnet restore --runtime win-x64` 设置的属性不同，会把运行目标写进普通锁；审核后用普通还原恢复普通锁的目标列表。完整原生回归含 Chromium 联动，先 `npm run build` 和 `npx playwright install chromium`；发布程序运行不依赖它们。
 - Markdown 使用 Markdig `1.3.2`；Windows 凭据使用 ProtectedData `10.0.12`。Docker 构建按锁文件 restore，不把 `.env`、本机资产和凭据放进镜像或提交。
 - 两个原生 PowerShell 脚本保留 UTF-8 BOM，Windows PowerShell 5 读取无 BOM 中文会误解析。发布时若同目录程序在运行，使用 `npm run native:release -- -OutputDirectory artifacts/native/<版本目录>`，不要强行关闭用户程序。成功发布才更新最近版本清单；用户关闭旧窗口后自行启动新版。
 - 用户已要求自行测试，不要控制其桌面窗口。UI 自动验证用 Avalonia headless 与隔离资料库；`WRITEME_QA_ARTIFACTS` 可指定格式浮层、折叠和右侧工具栏的 PNG 输出目录，供渲染检查。
@@ -132,6 +139,9 @@ npm run init-board          # 生成决策看板 board.html
 - ZIP 导入先验证清单/ID/循环/哈希，事务创建副本并重映射内部链接；不覆盖现有资料，不包含凭据、同步前沿和历史版本。Markdown 的相邻 `assets/` 导入需递归处理自定义块且校验哈希，不能读取越界、重解析点或远程 URL。
 - 同步是按文档/空间/文件夹的多值寄存器 CRDT，禁止用时间戳覆盖并发。普通写入不能消除未决冲突；显式选择必须核对前沿。网络期间继续编辑，收到响应后先保存最新草稿再合并；仅元信息变化保留会话和历史，正文变化前保存修订。关闭先取消/等待同步、登录和退出，再保存/释放库。
 - 版本向量设备 ID 属于当前资料库，导入旧库副本要生成新 actor；禁止复制已同步的活跃库作为另一设备。Windows DPAPI 令牌不进入 ZIP/日志，非 Windows 不降级明文。同步全部空间到当前账号，切换账号需明确该合并语义。服务器不提供端到端加密。
+- 上述 M6 规则只用于个人资料库。共享会话使用 Yjs 13.6.32 / YDotNet 0.6.0、UTF-16 与显式加密随机 uint32 client ID，禁止换回固定库的默认 ID 生成器。Stable block map 保留移动中的文字身份；StickyIndex 使用写事务，文末哨兵和显式 native 销毁均为固定版本兼容措施，升级时重新测中部/文末中文光标与跨端收敛。
+- 共享修改必须通过根会话和 CRDT history adapter；只读防护在 Core 与输入表面同时生效，读者展开只改本机投影/DOM。服务器先验证候选、作者与成员权限再落盘和 ACK；每条消息 key 必须对应消息 ID，恢复凭据绑定文档/讨论/消息/正文。隐藏节点也检查。拒绝时保留草稿并停止发送，导出后重新载入服务器版本不能再次应用拒绝草稿。
+- `/admin` 与 `/team` 分页、懒加载，但复用同源 HttpOnly 登录会话。临时密码首次设置撤销其他会话，停用/重置撤销旧登录；WebSocket 广播前复查收件权限。原生共享令牌与 M6 凭据分开，草稿按服务器/账号/文档隔离。
 - M6 协议、界限与部署验证见 [同步架构](.agents/notes/implemented/architecture/2026-09-08-sync-docker-crdt.md)，部署操作见 [同步指南](sync/README.md)。Compose 使用独立持久卷，默认回环绑定，端口由 `WRITEME_SYNC_PORT` 设置；不能重启其他用户服务来修复本项目环境。
 
 ## 文档地图
@@ -150,7 +160,8 @@ npm run init-board          # 生成决策看板 board.html
 - **折叠列表已实现**：原生版具备独立层级状态、子树拖入/移出、无损取消折叠及快捷键；手柄只在悬停时出现，移动保留折叠类型/子树/状态。禁止重开 AvaloniaEdit 默认文本拖放绕过结构事务。原生修改运行 `npm run native:test`；Web 细节见 `.agents/notes/implemented/feature/2026-09-09-toggle-block.md`，对应 `npm run test:editor`。
 - **原生后续验证**：已通过 Windows 中文输入、跨块选区、统一撤销与旧库兼容回归；10,000 块测试只证明虚拟化与投影正确，不是完整性能基准。还需同负载的真实输入/滚动延迟测量、跨平台输入、普通列表项独立拖动、完整剪贴板与无障碍支持。禁止由语言比例、exe 大小或不同负载的内存快照推导性能提升。
 - **M3–M6 已实现**：标签/双链/收藏、空间/文件夹/中文搜索/卡片、页面/封面/附件/主题/备份/每日/演示，以及自建同步。后续工作以真实使用反馈、跨平台输入、完整剪贴板/无障碍、普通列表独立拖动和同负载性能测量为依据；不把当前完成范围写成全部 Craft 功能。用户可见范围见 `README.md`，Docker 部署验证结果见同步笔记。
-- **段落评论已实现**：每段直接留言、逐条回复及回复的回复、编辑/删除/撤销、全文评论和文字批注，含 JSON/ZIP 与同账号文档同步。共享邀请、跨账号权限、@提醒、通知和逐条消息并发合并仍未实现；不能把本机作者“我”称作多人评论服务。
+- **段落评论已实现**：个人资料库支持逐条回复、编辑/删除/撤销、全文评论与文字批注、JSON/ZIP 和同账号同步。共享工作区另提供真实账号作者、ID 添加成员、权限与逐条消息并发合并；不能把个人本机作者“我”称作多人服务。邮件/链接邀请、@提醒、通知尚未实现。
+- **共享工作区已实现**：网页、原生登录和双端协作、独立后台、局域网 Docker 已验证；共享附件上传、个人资料迁入、离线冷启动、完整网页功能对等、CRDT 历史压缩/长期负载尚未完成。回归使用隔离账号与临时资料库，不向正式用户工作区灌入测试文档。
 
 
 

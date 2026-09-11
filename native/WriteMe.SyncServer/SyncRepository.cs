@@ -6,7 +6,7 @@ using WriteMe.Core;
 namespace WriteMe.SyncServer;
 
 // Note: 账号隔离的 CRDT 中转库，只存密码/会话哈希 — 见 .agents/notes/implemented/architecture/2026-09-08-sync-docker-crdt.md
-public sealed class SyncRepository : IDisposable
+public sealed partial class SyncRepository : IDisposable
 {
     private readonly SqliteConnection _database;
     private readonly object _gate = new();
@@ -27,11 +27,13 @@ public sealed class SyncRepository : IDisposable
                 CREATE TABLE IF NOT EXISTS server_counter(id INTEGER PRIMARY KEY,value INTEGER NOT NULL);
                 INSERT OR IGNORE INTO server_counter(id,value) VALUES(1,0);
                 """; command.ExecuteNonQuery();
+            InitializeSharedSchema();
             command.CommandText = "SELECT COUNT(*) FROM accounts";
             if (Convert.ToInt64(command.ExecuteScalar()) == 0)
             {
                 if (string.IsNullOrEmpty(setupUser) || string.IsNullOrEmpty(setupPassword)) throw new InvalidOperationException("首次启动请设置 WRITEME_SETUP_USER 和 WRITEME_SETUP_PASSWORD（至少 12 个字符）");
-                CreateAccount(setupUser, setupPassword);
+                var admin = CreateAccount(setupUser, setupPassword);
+                command.CommandText = "UPDATE accounts SET is_admin=1 WHERE id=$id"; command.Parameters.AddWithValue("$id", admin); command.ExecuteNonQuery();
             }
         }
         catch { _database.Dispose(); throw; }
@@ -39,8 +41,8 @@ public sealed class SyncRepository : IDisposable
 
     public string CreateAccount(string username, string password)
     {
-        username = username.Trim();
-        if (username.Length is < 1 or > 100 || username.Any(char.IsControl) || password.Length is < 12 or > 1024) throw new ArgumentException("账号名称无效，或密码不在 12–1024 字符范围内");
+        username = username?.Trim() ?? "";
+        if (username.Length is < 1 or > 100 || username.Any(char.IsControl) || password is not { Length: >= 12 and <= 1024 }) throw new ArgumentException("账号名称无效，或密码不在 12–1024 字符范围内");
         var salt = RandomNumberGenerator.GetBytes(32); var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 210000, HashAlgorithmName.SHA256, 32); var id = Guid.NewGuid().ToString("N");
         lock (_gate)
         {
@@ -54,7 +56,7 @@ public sealed class SyncRepository : IDisposable
         if (login.Username is not { Length: > 0 and <= 100 } || login.Password is not { Length: > 0 and <= 1024 }) return null;
         lock (_gate)
         {
-            using var command = _database.CreateCommand(); command.CommandText = "SELECT id,salt,password_hash FROM accounts WHERE username=$user"; command.Parameters.AddWithValue("$user", login.Username.Trim());
+            using var command = _database.CreateCommand(); command.CommandText = "SELECT id,salt,password_hash FROM accounts WHERE username=$user AND disabled=0"; command.Parameters.AddWithValue("$user", login.Username.Trim());
             string? id = null; byte[] salt = new byte[32]; byte[] expected = new byte[32];
             using (var reader = command.ExecuteReader()) if (reader.Read()) { id = reader.GetString(0); salt = (byte[])reader[1]; expected = (byte[])reader[2]; }
             var actual = Rfc2898DeriveBytes.Pbkdf2(login.Password, salt, 210000, HashAlgorithmName.SHA256, 32);
@@ -72,7 +74,7 @@ public sealed class SyncRepository : IDisposable
         if (token.Length is < 32 or > 128) return null;
         lock (_gate)
         {
-            using var command = _database.CreateCommand(); command.CommandText = "SELECT account_id FROM sessions WHERE token_hash=$hash AND expires_at>$now";
+            using var command = _database.CreateCommand(); command.CommandText = "SELECT account_id FROM sessions JOIN accounts ON accounts.id=sessions.account_id WHERE token_hash=$hash AND expires_at>$now AND disabled=0";
             command.Parameters.AddWithValue("$hash", TokenHash(token)); command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); return command.ExecuteScalar() as string;
         }
     }

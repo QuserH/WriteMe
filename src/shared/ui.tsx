@@ -1,0 +1,13 @@
+import { useEffect, useRef, type ReactNode } from "react";
+import Icon from "../components/Icon";
+
+export function Logo({ small = false }: { small?: boolean }) { return <div className={`shared-brand${small ? " small" : ""}`}><span className="shared-mark">w<span>·</span></span><b>WriteME</b></div>; }
+export function UserAvatar({ name, color }: { name: string; color?: string }) { return <span className="shared-avatar" style={color ? { background: `${color}19`, color } : undefined}>{[...name][0] ?? "W"}</span>; }
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) { return <div className="shared-field"><label><span>{label}</span>{children}</label>{hint && <small>{hint}</small>}</div>; }
+export function Modal({ title, description, children, close }: { title: string; description?: string; children: ReactNode; close: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { const old = document.activeElement as HTMLElement | null; ref.current?.querySelector<HTMLElement>("input,button")?.focus(); const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.isComposing) close(); if (event.key === "Tab") { const focusable = Array.from(ref.current?.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled),select:not(:disabled)") ?? []); const first = focusable[0]; const last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } } }; document.addEventListener("keydown", key); return () => { document.removeEventListener("keydown", key); old?.focus(); }; }, [close]);
+  return <div className="shared-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><div className="shared-modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}><button className="shared-icon modal-close" aria-label="关闭" onClick={close}><Icon name="close" /></button><h2>{title}</h2>{description && <p className="shared-muted">{description}</p>}{children}</div></div>;
+}
+export function AdminIcon() { return <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="m10 2 7 3v5c0 4-7 8-7 8s-7-4-7-8V5l7-3Z" /><path d="m6 10 3 3 5-6" /></svg>; }
+export function ExitIcon() { return <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8 3H3v14h5M8 10h10m-4-4 4 4-4 4" /></svg>; }

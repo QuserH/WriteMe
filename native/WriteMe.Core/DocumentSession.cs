@@ -12,6 +12,21 @@ public sealed partial class DocumentSession
     private string? _lastGroup;
     private long _lastEdit;
     private bool _batch;
+    private bool _isReadOnly;
+    private readonly Dictionary<Guid, bool> _viewCollapsed = [];
+    private long _viewRevision;
+    public bool IsReadOnly
+    {
+        get => _scopeOwner?.IsReadOnly ?? _isReadOnly;
+        set
+        {
+            if (_scopeOwner != null) { _scopeOwner.IsReadOnly = value; return; }
+            if (_isReadOnly == value) return;
+            _isReadOnly = value; _viewCollapsed.Clear(); _viewRevision++;
+            Projection = Project(); Selection = ResolveSelection(Selection);
+            BreakTypingGroup(); Revision++; Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
     public NoteNode Root { get; private set; }
     public DocumentProjection Projection { get; private set; }
     public EditorSelection Selection
@@ -20,42 +35,55 @@ public sealed partial class DocumentSession
         set { _selection = value; if (!_batch && _scopeOwner != null && IsScopeAttached) _scopeOwner.Selection = value; }
     }
     public long Revision { get; private set; }
-    public bool CanUndo => _scopeOwner?.CanUndo ?? _undo.Count > 0;
-    public bool CanRedo => _scopeOwner?.CanRedo ?? _redo.Count > 0;
+    public bool CanUndo => !IsReadOnly && (_scopeOwner?.CanUndo ?? _sharedHistory?.CanUndo ?? _undo.Count > 0);
+    public bool CanRedo => !IsReadOnly && (_scopeOwner?.CanRedo ?? _sharedHistory?.CanRedo ?? _redo.Count > 0);
     public ImmutableArray<NoteMark>? TypingMarks { get; private set; }
     public event EventHandler? Changed;
+
+    private DocumentProjection Project() => new(Root, HistoryOwner._viewCollapsed);
+    private bool IsCollapsed(NoteNode node) => HistoryOwner._viewCollapsed.GetValueOrDefault(node.Id, node.Bool("collapsed"));
+    private void ViewFolds(IEnumerable<(Guid Id, bool Collapsed)> changes, EditorSelection? selection = null)
+    {
+        var owner = HistoryOwner;
+        foreach (var (id, collapsed) in changes) owner._viewCollapsed[id] = collapsed;
+        owner._viewRevision++; owner.Projection = owner.Project();
+        owner.Selection = owner.ResolveSelection(selection ?? owner.Selection);
+        owner.Revision++; owner.Changed?.Invoke(owner, EventArgs.Empty);
+    }
 
     public DocumentSession(NoteNode root)
     {
         Root = NoteTree.Normalize(root);
-        Projection = new(Root);
+        Projection = Project();
         Selection = EditorSelection.At(Projection.Rows[0].Node.Id);
     }
 
     private void Commit(NoteNode root, EditorSelection? selection = null, string? group = null)
     {
+        if (IsReadOnly) return;
         if (ReferenceEquals(root, Root)) return;
         if (_batch)
         {
             Root = NoteTree.Normalize(root);
-            Projection = new(Root);
+            Projection = Project();
             Selection = ResolveSelection(selection ?? Selection);
             return;
         }
         if (_scopeOwner != null) { CommitScope(root, selection ?? Selection, group); return; }
         var now = Environment.TickCount64;
-        var separate = _undo.Count == 0 || group == null || group != _lastGroup || now - _lastEdit > 750;
+        var separate = !CanUndo || group == null || group != _lastGroup || now - _lastEdit > 750;
         var before = new Snapshot(Root, Selection);
         _lastGroup = group;
         _lastEdit = now;
         _redo.Clear();
         Root = NoteTree.Normalize(root);
-        Projection = new(Root);
+        Projection = Project();
         Selection = ResolveSelection(selection ?? Selection);
         // Keep both transaction selections: later caret navigation must not rewrite where
         // redo resumes typing, especially when the two points are in different cell scopes.
         var after = new Snapshot(Root, Selection);
-        if (separate)
+        if (_sharedHistory != null) _sharedHistory.Record(Root, separate);
+        else if (separate)
         {
             _undo.Add(new(before, after));
             if (_undo.Count > 200) _undo.RemoveAt(0);
@@ -76,7 +104,7 @@ public sealed partial class DocumentSession
                 var parent = NoteTree.Parent(Root, point.NodeId);
                 while (parent != null && parent.Id != host.Node.Id)
                 {
-                    if (parent.Type == "toggleBlock" && parent.Bool("collapsed") && parent.Content[0].Id != resolved.NodeId)
+                    if (parent.Type == "toggleBlock" && IsCollapsed(parent) && parent.Content[0].Id != resolved.NodeId)
                         resolved = new(parent.Content[0].Id, RichText.Plain(parent.Content[0]).Length);
                     parent = NoteTree.Parent(Root, parent.Id);
                 }
@@ -94,7 +122,7 @@ public sealed partial class DocumentSession
         return new(Resolve(selection.Anchor), Resolve(selection.Caret));
     }
 
-    public void BreakTypingGroup() { _lastGroup = null; TypingMarks = null; _scopeOwner?.BreakTypingGroup(); }
+    public void BreakTypingGroup() { _lastGroup = null; TypingMarks = null; _sharedHistory?.BreakGroup(); _scopeOwner?.BreakTypingGroup(); }
 
     public void ReplaceSelectionWithEnter(int start, int length, bool sibling = false, bool softBreak = false)
     {
@@ -120,8 +148,8 @@ public sealed partial class DocumentSession
         }
         Commit(result, selection);
     }
-    public void Undo() { if (_scopeOwner != null) _scopeOwner.Undo(); else Restore(_undo, _redo); }
-    public void Redo() { if (_scopeOwner != null) _scopeOwner.Redo(); else Restore(_redo, _undo, after: true); }
+    public void Undo() { if (IsReadOnly) return; if (_scopeOwner != null) _scopeOwner.Undo(); else if (_sharedHistory != null) _sharedHistory.Undo(); else Restore(_undo, _redo); }
+    public void Redo() { if (IsReadOnly) return; if (_scopeOwner != null) _scopeOwner.Redo(); else if (_sharedHistory != null) _sharedHistory.Redo(); else Restore(_redo, _undo, after: true); }
     private void Restore(List<HistoryEntry> from, List<HistoryEntry> to, bool after = false)
     {
         if (from.Count == 0) return;
@@ -130,7 +158,7 @@ public sealed partial class DocumentSession
         from.RemoveAt(from.Count - 1);
         var snapshot = after ? entry.After : entry.Before;
         Root = snapshot.Root;
-        Projection = new(Root);
+        Projection = Project();
         Selection = snapshot.Selection;
         BreakTypingGroup();
         Revision++;
@@ -218,6 +246,7 @@ public sealed partial class DocumentSession
 
     public void Format(int start, int length, NoteMark? mark, bool forceRemove = false, bool toggle = true)
     {
+        if (IsReadOnly) return;
         if (length == 0)
         {
             var row = Projection.At(start);
@@ -242,6 +271,7 @@ public sealed partial class DocumentSession
     {
         var node = NoteTree.Find(Root, blockId);
         if (node?.Type != "toggleBlock") return;
+        if (IsReadOnly) { ViewFolds([(blockId, !IsCollapsed(node))]); return; }
         if (node.Content.Length == 1)
         {
             var child = NoteNode.Toggle("");
@@ -253,11 +283,12 @@ public sealed partial class DocumentSession
 
     public void ToggleAll()
     {
-        SetAllCollapsed(NoteTree.Descendants(Root).Any(n => n.Type == "toggleBlock" && n.Content.Length > 1 && !n.Bool("collapsed")));
+        SetAllCollapsed(NoteTree.Descendants(Root).Any(n => n.Type == "toggleBlock" && n.Content.Length > 1 && !IsCollapsed(n)));
     }
 
     public void SetAllCollapsed(bool collapse)
     {
+        if (IsReadOnly) { ViewFolds(NoteTree.Descendants(Root).Where(n => n.Type == "toggleBlock").Select(n => (n.Id, collapse))); return; }
         NoteNode Visit(NoteNode n)
         {
             var children = n.Content.Select(Visit).ToImmutableArray();

@@ -29,6 +29,12 @@
           "SQLitePCLRaw.provider.e_sqlite3": "2.1.13"
         }
       },
+      "YDotNet": {
+        "type": "Direct",
+        "requested": "[0.6.0, )",
+        "resolved": "0.6.0",
+        "contentHash": "ipfaBgtyAbBAYuZfWjoNumCgzZPI7/cfhdP0ExFb03hQ3aZoDj5RNFYUtwCq85UnSFcSZpNyYNJlgsoHDkBN7Q=="
+      },
       "Microsoft.Data.Sqlite.Core": {
         "type": "Transitive",
         "resolved": "10.0.9",
