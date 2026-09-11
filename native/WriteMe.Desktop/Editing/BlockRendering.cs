@@ -185,7 +185,7 @@ internal sealed class BlockBackgroundRenderer(BlockEditor owner) : IBackgroundRe
             if (owner.DropTarget is { } drop && drop.IndicatorNode == row.Node.Id)
             {
                 var brush = Ui.Accent;
-                var targetX = Math.Max(4, BlockLayout.TextInset + drop.Depth * BlockLayout.Indent - inset);
+                var targetX = owner.DropIndicatorLeft(drop);
                 if (drop.Placement == DropPlacement.Inside)
                     context.DrawRectangle(owner.PageColor("#EDF3FC", "#293F5C"), new Pen(brush, 1), new Rect(x - 6, y, Math.Max(1, textView.Bounds.Width - x), line.Height), 7, 7);
                 var lineY = drop.Placement == DropPlacement.Before ? y : y + line.Height;

@@ -17,8 +17,6 @@ using WriteMe.Core;
 
 namespace WriteMe.Desktop.Editing;
 
-internal sealed record BlockDropTarget(Guid Target, DropPlacement Placement, Guid IndicatorNode, int Depth);
-
 public sealed record BlockCommand(string Name, string Kind, string Icon, string Aliases, int Level = 1)
 {
     public static readonly BlockCommand[] All =
@@ -528,35 +526,21 @@ public sealed partial class BlockEditor : UserControl
             return;
         }
         var y = _dragPointer.Y + view.ScrollOffset.Y;
-        var line = view.VisualLines.MinBy(l => y < l.VisualTop ? l.VisualTop - y : y > l.VisualTop + l.Height ? y - l.VisualTop - l.Height : 0)!;
+        var line = view.VisualLines.FirstOrDefault(l => y < l.VisualTop + l.Height) ?? view.VisualLines[^1];
         var row = Session.Projection.At(line.FirstDocumentLine.Offset);
         var relative = (y - line.VisualTop) / line.Height;
         // Match the level change to the horizontal drag from the actual grab point.
         // Absolute text coordinates overshoot by a level because a grip sits left of its text.
         var depth = Math.Max(0, _dragDepth + (int)Math.Round((_dragPointer.X - _dragStart.X) / BlockLayout.Indent, MidpointRounding.AwayFromZero));
-        var placement = row.IsToggle && depth > row.Depth && relative is >= .2 and <= .8
-            ? DropPlacement.Inside : relative < .5 ? DropPlacement.Before : DropPlacement.After;
-        while (row.Depth > depth)
-        {
-            var parent = NoteTree.Parent(Session.Root, row.Block.Id);
-            if (parent?.Type != "toggleBlock") break;
-            var parentRow = Session.Projection.Rows.FirstOrDefault(r => r.Block.Id == parent.Id);
-            if (parentRow == null) break;
-            row = parentRow;
-            placement = DropPlacement.After;
-        }
-        if (!Session.CanMove(sourceId, row.Block.Id, placement)) DropTarget = null;
-        else
-        {
-            var indicator = row;
-            if (placement == DropPlacement.After)
-            {
-                var ids = NoteTree.Descendants(row.Block).Select(node => node.Id).ToHashSet();
-                indicator = Session.Projection.Rows.Skip(row.Index).TakeWhile(candidate => ids.Contains(candidate.Node.Id)).Last();
-            }
-            DropTarget = new(row.Block.Id, placement, indicator.Node.Id, row.Depth + (placement == DropPlacement.Inside ? 1 : 0));
-        }
+        DropTarget = Session.ResolveBlockDrop(sourceId, row.Index, relative >= .5, depth,
+            inside: row.IsToggle && relative is >= .2 and <= .8);
         view.InvalidateLayer(KnownLayer.Background);
+    }
+
+    internal double DropIndicatorLeft(BlockDropTarget drop)
+    {
+        var destination = _dragRows[0] with { Depth = drop.Depth };
+        return Math.Max(4, BlockLayout.TextInset + drop.Depth * BlockLayout.Indent - PrefixInset(destination));
     }
 
     private void ScrollDrag()

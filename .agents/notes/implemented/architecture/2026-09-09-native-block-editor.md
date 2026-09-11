@@ -46,8 +46,9 @@ Status: implemented
 - `BlockRendering` 的 `blockGrip` 默认 `Opacity=0`、`IsHitTestVisible=false`；`BlockEditor` 用 `HoveredBlockId` 只显示鼠标所在块的手柄，退出编辑区域后隐藏。折叠三角保持可发现，不随手柄一起隐藏。
 - 待办、有序/无序列表与折叠块共用 28px 标记列。待办复选框为独立的 24×24px 点击区，与手柄互不重叠，点击手柄可以稳定打开块菜单；菜单绑定当前编辑表面，关闭后解除绑定。回调核对会话、文档树引用、编辑启用状态与预编辑，旧菜单不能修改切换后的文档。
 - 禁用 AvaloniaEdit 的 `EnableTextDragDrop`。默认选中文字的拖动走纯文本路径，会绕过结构事务；块手柄捕获指针后统一调用 `DocumentSession.Move`，传递拥有该行的块 ID，直接移动完整节点，保留 `toggleBlock` 类型、全部后代与 `collapsed`。
-- 落点层级以按下手柄时的真实横坐标为起点，每移动 28px 调整一层；三级向左一档成为二级同级，不再把手柄与文字之间的偏移重复扣成两层。相对目标标题更深且落在中间区域才表示移入。`CanMove` 与 `Move` 复用同一合法性判断，拒绝循环、拆出标题及相邻空移动；松手按最终指针位置复算。编辑区域外释放、捕获丢失或模型变化取消旧落点。
-- 插到展开折叠块后方时，蓝线与起点圆环绘制在最后一个可见后代之后，横向起点显示最终层级。`BlockDragPreview.cs` 复用只读原生编辑表面，按实际展开子树绘制宽度、换行和高度，收起时仅显示标题；只实例化有限视口，取消后释放。预览与透明度边界见 [幽灵块设置](../feature/2026-09-09-settings-ghost-opacity.md)。拖出、收起及恢复均使用统一历史。
+- 落点期望层级以按下手柄时的真实横坐标为起点，每移动 28px 调整一层；三级向左一档成为二级同级。Core 的 `ResolveBlockDrop` 根据相邻可见行共用的插入边界选择实际层级；展开标题下沿进入首项，子树末尾可选择内部末项或祖先的同级位置，明确左拖可以退出子树。原位右拖可进入前一折叠项，标题中心仍支持移入。完整候选规则见 [折叠块](../feature/2026-09-09-toggle-block.md)。
+- `CanMove` 与 `Move` 复用同一合法性判断，拒绝循环、拆出标题及相邻空移动；空移动不回退到另一层级。松手按最终指针位置复算。编辑区域外释放、捕获丢失或模型变化取消旧落点。
+- 插到展开折叠块后方时，蓝线与起点圆环绘制在最后一个可见后代之后；横向起点按移动块在最终层级的前缀计算，不能取紧凑区域相邻段落的不同前缀。`BlockDragPreview.cs` 复用只读原生编辑表面，按实际展开子树绘制宽度、换行和高度，收起时仅显示标题；只实例化有限视口，取消后释放。预览与透明度边界见 [幽灵块设置](../feature/2026-09-09-settings-ghost-opacity.md)。拖出、收起及恢复均使用统一历史。
 - 拖到编辑视口上下边缘时，定时更新模板 ScrollViewer 的 Offset 并重新计算落点。AvaloniaEdit `11.4.1` 的 `TextEditor.ScrollToVerticalOffset` 是空实现，直接修改 TextView 偏移也会被 ScrollViewer 的旧值覆盖，因此使用模板滚动容器。headless 指针拖动与定时器测试确认实际发生滚动并保留块数量。
 
 ### 待办与列表退出
@@ -67,15 +68,16 @@ Status: implemented
 
 ## Verification
 
-- 本次新增的 28 项回归分布在 `SlashMenuInteractionTests`（9 项）、`SlashCommandTests`（6 项）、`BlockDragInteractionTests`（8 项）和 `CaretRenderingTests`（5 项）。覆盖分类/搜索/空结果/旧按钮、原子撤销与富文本后缀、三级退出一层、展开尺寸、长标题断行、表格/分栏浮层、禁用区域、Tab/Escape 优先级及拖动/菜单打开时关闭窗口。光标测试直接读原生 CaretLayer 渲染像素，确认细线宽度、正文/标题/代码/空行的文字高度，以及行距变化、软换行和中文预编辑定位。
+- `BlockDropBoundaryTests` 的 19 项回归逐一检查实际蓝线像素和释放后的结构，覆盖首项、末项边界两侧、长标题、同级排序、左右移层、空移动/循环保护，以及滚动与复合区域。`artifacts/native/qa-toggle-drop-boundaries/` 保存对应原生渲染图。
+- 菜单、预览和光标的 28 项回归分布在 `SlashMenuInteractionTests`（9 项）、`SlashCommandTests`（6 项）、`BlockDragInteractionTests`（8 项）和 `CaretRenderingTests`（5 项）。覆盖分类/搜索/空结果/旧按钮、原子撤销与富文本后缀、三级退出一层、展开尺寸、长标题断行、表格/分栏浮层、禁用区域、Tab/Escape 优先级及拖动/菜单打开时关闭窗口。光标测试直接读原生 CaretLayer 渲染像素，确认细线宽度、正文/标题/代码/空行的文字高度，以及行距变化、软换行和中文预编辑定位。
 - `artifacts/native/qa-craft-menus-drag/` 保存菜单根级/列表/表格、浅色/深色/窄窗口、展开/收起/区域拖动、整页及光标的原生渲染图，已检查定位、行高、圆角、落点线与文字清晰度；图像属于本机验证产物，不进入 Git。CaretLayer 的像素检查使用 headless 1× 缩放，不能替代真实系统输入法或全部 DPI 验收。
 
-- `npm run native:build` 无警告/错误，`npm run native:test`：208 项通过。覆盖富文本/未知块 JSON 往返、旧空标题、五级折叠、跨块选区、emoji/软换行、统一撤销、子树移动与循环拒绝、SQLite WAL 在线导入和保存重开，并包含选区浮层与右侧工具栏的指针/键盘/草稿/保存回归、新建箭头与 Enter 层级、缩进按钮保留折叠子树、列表编号、左侧标题目录与虚拟化，以及长标题和连续软换行的续行缩进/选区/点击/输入回归。表格/分栏的模型、剪贴板、区域焦点、宽度、主题与集成检查集中在三个 `Layout*Tests.cs`。
+- `npm run native:build` 无警告/错误，`npm run native:test`：227 项通过。覆盖富文本/未知块 JSON 往返、旧空标题、五级折叠、跨块选区、emoji/软换行、统一撤销、子树移动与循环拒绝、SQLite WAL 在线导入和保存重开，并包含选区浮层与右侧工具栏的指针/键盘/草稿/保存回归、新建箭头与 Enter 层级、缩进按钮保留折叠子树、列表编号、左侧标题目录与虚拟化，以及长标题和连续软换行的续行缩进/选区/点击/输入回归。表格/分栏的模型、剪贴板、区域焦点、宽度、主题与集成检查集中在三个 `Layout*Tests.cs`。
 - `TaskEditingTests.cs` 的 6 项回归覆盖已完成/未完成待办的段首退出、保留邻项与折叠子树、清空文字后三种键盘出口、实际指针点击手柄打开删除菜单和连续撤销。`TextColorTests.cs` 的 6 项回归覆盖文字颜色范围、保留其他 textStyle 属性、默认恢复、软换行与隐藏子树、实际文字 run 绘制、双入口自定义色/中文预编辑/旧文档草稿、窄窗口及颜色与待办退出后的 SQLite 保存。持久化重开用内容与节点类型定位，不把运行期 GUID 当作持久化 ID。
 - Avalonia headless 测试执行原生键盘及指针路径：手柄初始隐藏、只悬停一个、移开隐藏；展开和收起的子折叠块分别拖到父级外，保持类型/子树/状态并可撤销；选中文字的拖动不能绕过块事务；composition 不保存候选拼音，Enter 不误建块；窗口立即切换/关闭也保存未落盘修改。
 - 渲染测试检查实际 native text run 的粗体、高亮及标题字号；10,000 块测试检查只为视口创建装饰控件，以及隐藏的 10,000 个子块不进入文字投影。这是虚拟化与投影正确性验证，不是输入延迟或滚动帧率跑分。
 - Windows 发布版实际鼠标验证使用 `artifacts/native-qa/`：拖出子折叠块后，三角和孙级内容仍存在，点击三角可正常隐藏孙级。真实中文输入法验证 `ni` 候选后空格提交“你”，候选阶段只读库正文仍未改变；候选确认 Return 不误建子项，确认后的普通 Return 才创建子折叠块。
-- `npm run native:release` 生成自包含 Windows 发布版 `artifacts/native/craft-menus-drag-win-x64/WriteME.Native.exe`，无窗口 `--smoke-test` 在新建隔离目录返回成功，验证随包运行时、SQLite、中文检索和标签。既有 Web 基线的 `npm run build` 与完整路径 `cargo build --locked` 通过。Web 编辑器已有 45 项 Playwright 回归，本轮原生排版扩展未改变 Web 编辑行为。
+- `npm run native:release` 生成自包含 Windows 发布版 `artifacts/native/toggle-drop-fix-win-x64/WriteME.Native.exe`，无窗口 `--smoke-test` 在新建隔离目录返回成功，验证随包运行时、SQLite、中文检索和标签。既有 Web 基线的 `npm run build` 与完整路径 `cargo build --locked` 通过。Web 编辑器已有 45 项 Playwright 回归，原生落点修复未改变 Web 编辑行为。
 
 ## Measurement boundaries
 

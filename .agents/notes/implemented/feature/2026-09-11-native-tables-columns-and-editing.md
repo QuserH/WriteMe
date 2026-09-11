@@ -13,6 +13,7 @@ Status: implemented
 - `DocumentProjection.LayoutHost` 把内部文字映射到所在复合块。复合块在父编辑器中占一个原子位置，内部文字由原生区域表面编辑；跳转先展开必要折叠祖先，再进入正确单元格或分栏。标题目录、全文文字和关联抽取共用 `NoteNode.IsContentContainer`，搜索与关联索引版本升为 2，升级事务重建派生索引而不修改正文。
 - `LayoutElementGenerator` 按块 ID 缓存原生控件。表格只有正在编辑的单元格装配 `BlockEditor`，其他格子使用富文本摘要；图片、附件与未知块在摘要中显示名称/保留提示，避免把有内容的格子画成空白。分栏各自使用区域编辑器。AvaloniaEdit 的 inline object 复用同一控件，输入刷新不主动拆卸；父编辑器忽略属于子区域的隧道事件，避免重复执行编辑键。
 - 页面字体、字号、行距、文字色、底色、分隔线、幽灵块偏好和最新关联目录传递到已缓存的区域。表头在预览和编辑状态保持加粗。紧凑区域使用同一个前缀偏移计算文字、层级线、命中与拖放位置；段落 `textAlign` 通过原生 `TextParagraphProperties` 实现左/中/右/两端对齐。
+- 拖动落地线按移动块在目的层级的前缀计算起点。单元格顶层正文可为零前缀，而折叠标题保留标记区，不能借用相邻正文的前缀来画折叠项落点；边界与层级规则共用 [折叠块解析](2026-09-09-toggle-block.md)。
 
 ### 表格与分栏交互
 
@@ -34,8 +35,9 @@ Status: implemented
 - `LayoutBlockTests` 覆盖区域历史/选区、失效会话、quoted TSV、表头与行列操作、列宽往返、无损减少/取消分栏、原子选区替换、隐藏标题定位、合并单元格保护、Markdown 往返。
 - `LayoutInteractionTests` 使用原生指针/键盘路径验证中文提交/候选、连续 Shift 选区、范围替换、跨格撤销重做和光标、真实剪贴板调用、菜单插入位置与删除焦点、两类宽度拖动、取消/轻点、对齐、嵌套样式/关联更新及图片摘要。
 - `SlashMenuInteractionTests` 验证区域菜单不被单元格裁剪、共享历史、Tab/Escape 优先级、祖先禁用和菜单打开时关闭窗口；`BlockDragInteractionTests` 验证表格/分栏内折叠预览与正文断行、行高一致，以及取消和卸载。
+- `BlockDropBoundaryTests` 在表格与分栏内实际拖出折叠子项，核对目的位置的蓝线像素、子树保留以及主文档一次撤销；图像在 `artifacts/native/qa-toggle-drop-boundaries/`。
 - `LayoutWorkspaceTests` 使用隔离 SQLite 验证嵌套正文搜索与定位、关闭保存、文档删除后撤销恢复、卡片/列表及排序，核对纸张与工具区不重叠。`artifacts/native/qa-craft-menus-drag/` 保存 1493px 完整工具区、1320px 页面、820px 窄窗口、浅色/深色与自定义页面原生渲染图。
-- 完整原生套件为 208 项；交付检查包括 `npm run native:build`、`npm run native:test`、保留的 Web 构建、锁定 Rust 构建及 `npm run verify-notes`。发布至 `artifacts/native/craft-menus-drag-win-x64/`，使用新的空资料库执行无窗口 `--smoke-test`；自动回归使用隔离资料库，不控制用户原生窗口。
+- 完整原生套件为 227 项；交付检查包括 `npm run native:build`、`npm run native:test`、保留的 Web 构建、锁定 Rust 构建及 `npm run verify-notes`。发布至 `artifacts/native/toggle-drop-fix-win-x64/`，使用新的空资料库执行无窗口 `--smoke-test`；自动回归使用隔离资料库，不控制用户原生窗口。
 
 ## Alternatives considered
 
