@@ -18,14 +18,39 @@ public sealed partial class BlockEditor
     private bool _layoutWidthQueued;
     private bool _appearanceQueued;
     private bool _disposed;
+    private bool _detaching;
     public bool IsCompact { get; }
+    internal bool IsDragPreview { get; }
+    internal double? PreviewInset { get; init; }
+    internal int PreviewDepth { get; init; }
+    internal bool PreviewQuote { get; init; }
     internal bool IsTableCell { get; set; }
     internal Func<KeyEventArgs, bool>? EmbeddedKey { get; set; }
     public BlockEditor ActiveEditor => _activeChild is { _disposed: false } child && child.Session.IsScopeAttached ? child.ActiveEditor : this;
     public bool IsAnyComposing => ActiveEditor.InputClient.IsComposing;
+    private BlockEditor OverlayOwner
+    {
+        get { var owner = this; while (owner._parentEditor != null) owner = owner._parentEditor; return owner; }
+    }
 
-    internal double PrefixInset(BlockRow row) => IsTableCell && row.Depth == 0 && !row.IsToggle && !row.Quote && row.Marker.Length == 0
-        && row.Node.Type is "paragraph" or "heading" ? BlockLayout.TextStart(row) : IsCompact ? 24 : 0;
+    private void MountOverlay(Control control, bool restore = false)
+    {
+        if (IsDragPreview) return;
+        var host = restore ? _layout : OverlayOwner._layout;
+        if (control.Parent == host) return;
+        if (restore && _detaching)
+        {
+            // Avalonia is enumerating the ancestor's children during detach. Reparenting
+            // a page overlay here invalidates that enumeration when an embedded editor closes.
+            Dispatcher.UIThread.Post(() => { if (!control.IsVisible) MountOverlay(control, restore: true); });
+            return;
+        }
+        if (control.Parent is Panel previous) previous.Children.Remove(control);
+        host.Children.Add(control);
+    }
+
+    internal double PrefixInset(BlockRow row) => PreviewInset ?? (IsTableCell && row.Depth == 0 && !row.IsToggle && !row.Quote && row.Marker.Length == 0
+        && row.Node.Type is "paragraph" or "heading" ? BlockLayout.TextStart(row) : IsCompact ? 24 : 0);
     internal double TextStart(BlockRow row) => BlockLayout.TextStart(row) - PrefixInset(row);
 
     public void RefreshPageAppearance()
@@ -80,7 +105,7 @@ public sealed partial class BlockEditor
 
     internal BlockEditor CreateEmbedded(Guid container, bool cell = false)
     {
-        var editor = new BlockEditor(Session.CreateScope(container), true)
+        var editor = new BlockEditor(Session.CreateScope(container), true, IsDragPreview)
         {
             _parentEditor = this, IsTableCell = cell, ResolveAsset = id => ResolveAsset?.Invoke(id),
             CreateReferencedNote = name => CreateReferencedNote?.Invoke(name),
@@ -151,6 +176,7 @@ public sealed partial class BlockEditor
         Session.Changed -= SessionChanged;
         Session.Dispose();
         _dragScroll.Stop();
+        HideCommands(); CancelDrag();
         InputClient.Cancel();
         Formatting.Reset(); References.Reset();
         ClearAssetCache();

@@ -7,22 +7,22 @@
     <Style Selector="Window">
       <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI, Noto Sans CJK SC, sans-serif" />
       <Setter Property="FontSize" Value="13" />
-      <Setter Property="Foreground" Value="{DynamicResource Chrome292927}" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome1A1C1E}" />
       <Setter Property="Background" Value="{DynamicResource ChromeFFFFFF}" />
     </Style>
     <Style Selector="Button.quiet">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="8,6" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.quiet:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ChromeEEEDEA}" />
+      <Setter Property="Background" Value="{DynamicResource ChromeF1F1F2}" />
     </Style>
     <Style Selector="Button.quiet.active /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ChromeE9E8E5}" />
+      <Setter Property="Background" Value="{DynamicResource ChromeEDEEEF}" />
     </Style>
     <Style Selector="Button.libraryNav.active /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
@@ -53,12 +53,12 @@
     <Style Selector=":is(Button).formatAction">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector=":is(Button).formatAction:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ChromeF1F0ED}" />
+      <Setter Property="Background" Value="{DynamicResource ChromeF1F1F2}" />
     </Style>
     <Style Selector="ToggleButton.formatAction:checked /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ChromeE8EDF1}" />
@@ -102,5 +102,6 @@
       <Setter Property="IsVisible" Value="False" />
     </Style>
     <StyleInclude Source="avares://WriteME.Native/Themes/EditorSidebar.axaml" />
+    <StyleInclude Source="avares://WriteME.Native/Themes/EditorMenus.axaml" />
   </Application.Styles>
 </Application>

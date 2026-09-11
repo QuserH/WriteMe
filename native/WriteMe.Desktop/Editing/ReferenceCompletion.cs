@@ -39,8 +39,8 @@ public sealed class ReferenceCompletion : Border
     public ReferenceCompletion(BlockEditor owner)
     {
         _owner = owner;
-        Background = Ui.Surface; BorderBrush = Ui.Line; BorderThickness = new(1); CornerRadius = new(11);
-        BoxShadow = new(new BoxShadow { Blur = 22, OffsetY = 5, Color = Color.Parse("#19000000") });
+        Background = Ui.Chrome("#FAFAFA"); BorderBrush = Ui.Chrome("#EDEEEF"); BorderThickness = new(1); CornerRadius = new(14);
+        BoxShadow = Ui.FloatingShadow;
         HorizontalAlignment = HorizontalAlignment.Left; VerticalAlignment = VerticalAlignment.Top; IsVisible = false; ZIndex = 50;
         AutomationProperties.SetAutomationId(this, "ReferenceCompletion");
         AutomationProperties.SetName(_search, "搜索要链接的笔记");

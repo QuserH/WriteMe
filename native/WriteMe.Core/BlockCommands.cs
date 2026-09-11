@@ -81,7 +81,7 @@ public sealed partial class DocumentSession
         return Move(blockId, parent.Id, DropPlacement.After);
     }
 
-    public bool Move(Guid sourceId, Guid targetId, DropPlacement placement, bool append = false)
+    public bool CanMove(Guid sourceId, Guid targetId, DropPlacement placement, bool append = false)
     {
         if (sourceId == targetId) return false;
         var source = NoteTree.Find(Root, sourceId);
@@ -94,6 +94,26 @@ public sealed partial class DocumentSession
         var targetParent = NoteTree.Parent(Root, targetId);
         if (placement != DropPlacement.Inside && targetParent?.Type is "bulletList" or "orderedList" or "taskList") return false;
         if (placement == DropPlacement.Inside && target.Type != "toggleBlock") return false;
+        if (placement == DropPlacement.Inside && target.Id == sourceParent?.Id)
+        {
+            var index = target.Content.FindIndex(node => node.Id == sourceId);
+            if (index == (append ? target.Content.Length - 1 : 1)) return false;
+        }
+        if (placement != DropPlacement.Inside && targetParent?.Id == sourceParent?.Id && sourceParent != null)
+        {
+            var sourceIndex = sourceParent.Content.FindIndex(node => node.Id == sourceId);
+            var targetIndex = sourceParent.Content.FindIndex(node => node.Id == targetId);
+            if (placement == DropPlacement.Before && sourceIndex + 1 == targetIndex
+                || placement == DropPlacement.After && sourceIndex == targetIndex + 1) return false;
+        }
+        return true;
+    }
+
+    public bool Move(Guid sourceId, Guid targetId, DropPlacement placement, bool append = false)
+    {
+        if (!CanMove(sourceId, targetId, placement, append)) return false;
+        var source = NoteTree.Find(Root, sourceId)!;
+        var target = NoteTree.Find(Root, targetId)!;
         var root = NoteTree.Replace(Root, sourceId);
         if (placement == DropPlacement.Inside)
             root = NoteTree.Update(root, targetId, n => n.WithAttr("collapsed", false) with { Content = n.Content.Insert(append ? n.Content.Length : 1, source) });

@@ -17,6 +17,7 @@ Status: implemented
 ### 表格与分栏交互
 
 - 插入面板的表格尺寸选择器提供 5×6 个起始尺寸，后续通过表内按钮/菜单增删行列。Tab/Shift+Tab 切换单元格，末格 Tab 增加一行；Escape 从文字编辑退到格子选区，再退到整表选择。Ctrl+Enter 在复合块后创建正文；分栏内 Ctrl+Tab/Ctrl+Shift+Tab 循环切换栏。
+- `/ → 插入表格` 使用实际 Craft 参考的 2×2 至 9×9 二级尺寸列表。区域内斜杠菜单和拖动预览挂到根编辑浮层；菜单打开时 Tab/Enter 确认叶项、Escape 返回上级，拖动期间 Escape 先取消拖动，之后才执行区域退出。有效启用状态包含祖先容器，不能通过根浮层向已禁用单元格写入。卸载时延后归还浮层，避免关闭窗口时改变 Avalonia 正遍历的子集合；完整约定见 [原生编辑器](../architecture/2026-09-09-native-block-editor.md)。
 - Shift+点击或 Shift+方向键选择矩形区域。Delete/Backspace 只清空格子，直接输入替换选区并落在左上格，一次撤销恢复全部内容。范围选择期间焦点留在父 TextArea，继续提供 Windows IME 客户端；候选阶段不执行结构命令，收到已提交 TextInput 后才结束预编辑并替换。
 - 表格复制/剪切使用带引号的 TSV，保留字段内的制表符、换行和引号；Ctrl+V 可扩展行列，超限或引号未闭合在变更前拒绝。异步剪贴板回调核对会话、修订、格子及选区。清空/剪切不删除网格，行列删除会重新定位相邻可编辑格，最后一行/列删除整表。
 - 列分隔线提供 8px 拖动区；按下记录当前宽度和修订，移动只预览，松手用标准 `cell.attrs.colwidth: [px]` 一次提交。单列值限制 80–1200px，表格在可用宽度内按比例分配，窄视口保留最小总宽并允许横向滚动。轻点、Escape、捕获丢失、修订或视口变化不提交预览；“均分列宽”清除显式宽度。插入新行继承已有列宽。
@@ -32,8 +33,9 @@ Status: implemented
 
 - `LayoutBlockTests` 覆盖区域历史/选区、失效会话、quoted TSV、表头与行列操作、列宽往返、无损减少/取消分栏、原子选区替换、隐藏标题定位、合并单元格保护、Markdown 往返。
 - `LayoutInteractionTests` 使用原生指针/键盘路径验证中文提交/候选、连续 Shift 选区、范围替换、跨格撤销重做和光标、真实剪贴板调用、菜单插入位置与删除焦点、两类宽度拖动、取消/轻点、对齐、嵌套样式/关联更新及图片摘要。
-- `LayoutWorkspaceTests` 使用隔离 SQLite 验证嵌套正文搜索与定位、关闭保存、文档删除后撤销恢复、卡片/列表及排序，核对纸张与工具区不重叠。`artifacts/native/qa-craft-layout/` 保存 1493px 完整工具区、1320px 页面、820px 窄窗口、浅色/深色与自定义页面原生渲染图。
-- 完整原生套件为 180 项；交付检查包括 `npm run native:build`、`npm run native:test`、保留的 Web 构建、锁定 Rust 构建及 `npm run verify-notes`。发布至 `artifacts/native/craft-layout-win-x64/`，使用新的空资料库执行无窗口 `--smoke-test`；不操作用户桌面窗口或 Craft 文档内容。
+- `SlashMenuInteractionTests` 验证区域菜单不被单元格裁剪、共享历史、Tab/Escape 优先级、祖先禁用和菜单打开时关闭窗口；`BlockDragInteractionTests` 验证表格/分栏内折叠预览与正文断行、行高一致，以及取消和卸载。
+- `LayoutWorkspaceTests` 使用隔离 SQLite 验证嵌套正文搜索与定位、关闭保存、文档删除后撤销恢复、卡片/列表及排序，核对纸张与工具区不重叠。`artifacts/native/qa-craft-menus-drag/` 保存 1493px 完整工具区、1320px 页面、820px 窄窗口、浅色/深色与自定义页面原生渲染图。
+- 完整原生套件为 208 项；交付检查包括 `npm run native:build`、`npm run native:test`、保留的 Web 构建、锁定 Rust 构建及 `npm run verify-notes`。发布至 `artifacts/native/craft-menus-drag-win-x64/`，使用新的空资料库执行无窗口 `--smoke-test`；自动回归使用隔离资料库，不控制用户原生窗口。
 
 ## Alternatives considered
 

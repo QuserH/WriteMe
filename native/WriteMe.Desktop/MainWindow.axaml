@@ -5,7 +5,7 @@
         x:Class="WriteMe.Desktop.MainWindow"
         Title="WriteME · 原生版" Width="1180" Height="820" MinWidth="780" MinHeight="560"
         WindowStartupLocation="CenterScreen" Icon="/Assets/icon.ico">
-  <Grid x:Name="Shell" ColumnDefinitions="292,*" RowDefinitions="56,*" Background="{DynamicResource ChromeF4F5F7}">
+  <Grid x:Name="Shell" ColumnDefinitions="292,*" RowDefinitions="56,*" Background="{DynamicResource ChromeFCFDFE}">
     <Grid Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" Margin="18,4,20,0">
       <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
         <TextBlock Text="WriteME" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Chrome41464C}" VerticalAlignment="Center" />
@@ -20,7 +20,7 @@
         <Button x:Name="MoreButton" Classes="quiet" Content="⋯" FontSize="18" AutomationProperties.Name="文档菜单" />
       </StackPanel>
     </Grid>
-    <Border x:Name="LibrarySidebar" Grid.Row="1" Background="{DynamicResource ChromeF4F5F7}" ClipToBounds="True">
+    <Border x:Name="LibrarySidebar" Grid.Row="1" Background="{DynamicResource ChromeFCFDFE}" ClipToBounds="True">
       <Grid RowDefinitions="*,Auto">
         <Grid x:Name="LeftPaneHost">
       <Grid x:Name="SpacePane" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
@@ -73,8 +73,9 @@
         </Border>
       </Grid>
     </Border>
-    <Grid x:Name="DocumentRegion" Grid.Column="1" Grid.Row="1" RowDefinitions="Auto,*,30">
-      <Border x:Name="PageBackground" Grid.RowSpan="3" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeE9EBEF}" BorderThickness="1" CornerRadius="16" Margin="6,0,12,12" />
+    <Grid x:Name="DocumentRegion" Grid.Column="1" Grid.Row="1" RowDefinitions="Auto,*,42">
+      <Border x:Name="PageBackground" Grid.RowSpan="3" Background="{DynamicResource ChromeFFFFFF}" BorderBrush="{DynamicResource ChromeEDEEEF}" BorderThickness="1" CornerRadius="26" Margin="6,0,12,12"
+              BoxShadow="0 1 1 -0.5 #0F000000, 0 3 3 -1.5 #0F000000, 0 6 6 -3 #0F000000, 0 12 12 -6 #0A000000, 0 24 24 -12 #08000000" />
       <Grid x:Name="TitleRegion" MaxWidth="900" HorizontalAlignment="Stretch" Margin="32,58,88,8">
         <StackPanel Margin="48,0,8,0">
           <Border x:Name="CoverFrame" IsVisible="False" Height="170" Margin="0,-35,0,22" CornerRadius="14" ClipToBounds="True" Background="{DynamicResource ChromeF0F2F5}">
@@ -85,7 +86,7 @@
         </StackPanel>
       </Grid>
       <Grid x:Name="EditorHost" Grid.Row="1" Margin="32,24,88,0" MaxWidth="900" />
-      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="23,0,26,0">
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="23,0,26,16">
         <TextBlock x:Name="StatusLabel" FontSize="10" Foreground="{DynamicResource Chrome96968E}" VerticalAlignment="Center" Text="已保存到本机" TextTrimming="CharacterEllipsis" />
         <TextBlock x:Name="WordCount" Grid.Column="1" FontSize="10" Foreground="{DynamicResource ChromeACACA4}" VerticalAlignment="Center" />
       </Grid>

@@ -25,6 +25,7 @@ Status: implemented
 - `BlockCommands.Enter/ConvertBlock` 与侧栏 `InsertBlock` 的新建折叠项显式保存 `collapsed: true`；Markdown 加号空格、斜杠菜单、快捷键、块菜单、格式面板与插入面板共用此规则。`NoteNode.Toggle` 的无子项工厂也默认收起，带子项的演示/夹具仍默认展开。解析旧 JSON 不统一改写 collapsed，已有展开状态和子树保持原样。
 - 标题中按 Enter 分割富文本并创建紧接标题的子折叠项，光标进入新子项；父级同一事务设为展开，子项默认收起。空标题使用相同行为，不再退出或退化成正文。Ctrl+Enter 创建同级收起项；退出层级使用 Shift+Tab，取消包装使用段首 Backspace 或块样式命令，已有文字和子树仍保留。
 - `BlockRow.IsExpanded` 同时检查展开属性与实际子内容；只有标题的节点始终显示右三角。拖走最后一个子项后，原父级回到右三角且不显示自身层级线。点击空节点箭头会创建一个可编辑子项并定位进去，可一次撤销；展开/收起全部跳过空叶，不额外制造内容。
+- 指针拖动的层级以实际按下手柄的位置为起点，每 28px 对应一层；三级向左一档成为二级同级，整个子树与收起状态保留。插到展开块后方时，提示线位于最后一个可见后代之后。拖动预览使用 [幽灵块](2026-09-09-settings-ghost-opacity.md) 的只读原生排版，展开/收起分别反映可见子树/标题尺寸；预览和提交共用 `CanMove` 合法性判断，单次撤销恢复原层级。
 - `DocumentProjection.GuideDepths` 记录实际展开的折叠祖先深度；`BlockBackgroundRenderer` 单处绘制从父级箭头下方到子内容末端的细线。普通列表/引用缩进不伪装成折叠祖先，长标题换行时延续层级线，收起和移出后随投影清理。删除前缀 Canvas 中重复的层级线绘制。
 - `ToggleDisclosureButton` 使用原生绘制的 10×10px 矢量三角，按实际 Craft SVG 的 `viewBox="-1.5 -1.5 13 13"`、三角顶点和 1.5px 圆角描边缩放；收起时从下向三角旋转为右向。点击区域为 24×24px；普通状态使用 `#1F2225` 的 0.33 透明度，光标所在块或悬停块为 1。独立 Button 子类显式复用 Button 主题模板，避免有逻辑但没有可见内容。
 - `BlockLayout` 统一 28px 标记列、28px 每级缩进及祖先线位置；顶层编辑区文字起点为 48px 基础前缀加层级缩进，折叠标题、待办和有序/无序列表另加标记列。独立编辑表面默认 15px，实际文档字号/行距由页面外观控制；折叠父子项起点间距至少 28px，普通顶层段落至少 36px。单元格/分栏通过 `PrefixInset/TextStart` 同步调整前缀、续行、祖先线、命中及拖放坐标，见 [复合区域](2026-09-11-native-tables-columns-and-editing.md)。待办复选框为 24×24px，列表标记以祖先线横坐标居中，避免与手柄重叠而无法打开删除菜单。
@@ -34,11 +35,15 @@ Status: implemented
 
 ## Verification
 
+`BlockDragInteractionTests` 另覆盖三级折叠向左一档成为二级同级（展开/收起两种状态）、完整子树及撤销、提示线位于可见子树末尾、展开预览的实际行高和长标题断行，以及单元格/分栏内取消和关闭清理。`SlashMenuInteractionTests` 通过 `/ → 列表 → 折叠列表` 的鼠标与键盘路径验证转换。
+
 `npm run test:editor` 覆盖独立折叠、反复点击、刷新与文档切换、中文输入、composition 确认、斜杠创建子级、Tab 层级移动、富文本分割、取消折叠及撤销、HTML 往返、旧版空标题迁移，以及 860px 窗口中的五级长标题布局。与 [M2 块拖拽笔记](2026-09-08-m2-block-drag.md) 共享测试集。
 
-原生 `npm run native:test` 共 153 项通过。`DocumentToolsTests` 与 `CraftInteractionTests` 覆盖各新建入口的初始右箭头、空标题和五级 Enter、父级下箭头与祖先线、同级/移出、旧状态解析、单步撤销、侧栏插入和父子状态保存。`DeepLongTitlesWrapWithIndentationAndKeepEveryCharacter` 在 780px / 360px 编辑窗口检查五级长标题续行真实起点、选区子矩形、鼠标定位、中文插入及撤销；窄宽度覆盖缩进超过视口一半的情况。`SoftBreaksAndWrappedRichTextKeepTheBlockIndentWithoutChangingSavedText` 覆盖正文/标题/折叠子正文、连续软换行、emoji、粗体高亮、预编辑光标与原 JSON 不变，并确认默认 TextFormatter 没被全局替换。`TaskEditingTests` 检查手柄与复选框点击区分离、待办退出时保留折叠子树，以及菜单删除与撤销。headless PNG 检查新建/Enter 后、五级长标题、左右导航和窄窗口的实际原生布局。
+原生 `npm run native:test` 共 208 项通过。`DocumentToolsTests` 与 `CraftInteractionTests` 覆盖各新建入口的初始右箭头、空标题和五级 Enter、父级下箭头与祖先线、同级/移出、旧状态解析、单步撤销、侧栏插入和父子状态保存。`DeepLongTitlesWrapWithIndentationAndKeepEveryCharacter` 在 780px / 360px 编辑窗口检查五级长标题续行真实起点、选区子矩形、鼠标定位、中文插入及撤销；窄宽度覆盖缩进超过视口一半的情况。`SoftBreaksAndWrappedRichTextKeepTheBlockIndentWithoutChangingSavedText` 覆盖正文/标题/折叠子正文、连续软换行、emoji、粗体高亮、预编辑光标与原 JSON 不变，并确认默认 TextFormatter 没被全局替换。`TaskEditingTests` 检查手柄与复选框点击区分离、待办退出时保留折叠子树，以及菜单删除与撤销。headless PNG 检查新建/Enter 后、五级长标题、左右导航和窄窗口的实际原生布局。
 
 ## Alternatives considered
+
+- **复用文字绝对缩进阈值计算拖出层数**：落点栏直观且不用记录起点；手柄与文字起点的偏移会使三级向左一档被判为直接回到顶层。以真实抓取点的横向位移决定层级，标题中心与目标深度一起决定移入，避免只有像素轮廓正确而结构结果不同。
 
 - **复用 React NodeView，只修 CSS**：改动小且与 React 宿主一致；但这里仅有一个按钮，额外内容包裹与 effect 生命周期没有收益。固定 contentDOM 使归属和样式边界直接，免去展示 DOM 与编辑器解析之间的竞争。
 - **独立 toggleTitle / toggleContent 节点**：结构约束明确，后续标题支持更多块类型时有价值；当前 paragraph 足够，新增持久化节点的迁移与粘贴维护成本没有必要。

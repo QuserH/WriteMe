@@ -44,11 +44,11 @@ public sealed class FormattingToolbar : Border
         _owner = owner;
         IsVisible = false;
         Padding = new(5);
-        Background = Ui.Surface;
-        BorderBrush = Ui.Line;
+        Background = Ui.Chrome("#FAFAFA");
+        BorderBrush = Ui.Chrome("#EDEEEF");
         BorderThickness = new(1);
-        CornerRadius = new(9);
-        BoxShadow = new(new BoxShadow { Blur = 18, OffsetY = 4, Color = Color.Parse("#20000000") });
+        CornerRadius = new(14);
+        BoxShadow = Ui.FloatingShadow;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
         AutomationProperties.SetName(this, "文字格式工具栏");

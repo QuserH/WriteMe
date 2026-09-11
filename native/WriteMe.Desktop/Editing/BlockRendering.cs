@@ -29,7 +29,7 @@ internal sealed class BlockStyleTransformer(BlockEditor owner) : DocumentColoriz
                 props.SetFontRenderingEmSize(owner.Surface.FontSize);
             }
             if (row.IsAtomic) props.SetForegroundBrush(row.Node.Type == "horizontalRule" ? Brushes.Transparent : owner.PageMuted);
-            if (row.Quote) props.SetForegroundBrush(owner.PageColor("#626871", "#B4BECA"));
+            if (row.Quote || owner.PreviewQuote) props.SetForegroundBrush(owner.PageColor("#626871", "#B4BECA"));
             if (row.IsTask && row.Block.Bool("checked"))
             {
                 props.SetForegroundBrush(owner.PageMuted);
@@ -104,7 +104,7 @@ internal sealed class BlockPrefixGenerator(BlockEditor owner) : VisualLineElemen
     {
         var row = owner.Session.Projection.At(offset);
         var inset = owner.PrefixInset(row);
-        var panel = new Canvas { Width = owner.TextStart(row), Height = owner.IsTableCell ? 26 : row.IsToggle || row.Depth > 0 ? 28 : 36, Background = Brushes.Transparent };
+        var panel = new Canvas { Width = owner.TextStart(row), Height = owner.IsTableCell ? 26 : row.IsToggle || row.Depth + owner.PreviewDepth > 0 ? 28 : 36, Background = Brushes.Transparent };
         TextBlock.SetBaselineOffset(panel, 17);
         if (owner.IsTableCell && panel.Width == 0) return new PrefixElement(panel);
         var grip = Ui.Button("⠿", "拖动块；单击打开块菜单", () => { }, 22);
@@ -120,7 +120,7 @@ internal sealed class BlockPrefixGenerator(BlockEditor owner) : VisualLineElemen
         Canvas.SetLeft(grip, BlockLayout.TextInset - 32 + row.Depth * BlockLayout.Indent - inset);
         Canvas.SetTop(grip, 1);
         grip.AddHandler(InputElement.PointerPressedEvent, (_, e) => owner.BeginBlockDrag(row, e), Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        panel.Children.Add(grip);
+        if (!owner.IsDragPreview) panel.Children.Add(grip);
         if (row.IsToggle)
         {
             var arrow = new ToggleDisclosureButton(row.IsExpanded, () => owner.Fold(row.Block.Id));
@@ -181,28 +181,33 @@ internal sealed class BlockBackgroundRenderer(BlockEditor owner) : IBackgroundRe
                 var left = BlockLayout.TextInset - 6 + row.Depth * BlockLayout.Indent - inset;
                 context.DrawRectangle(owner.PageColor("#F5F7FC", "#2D3949"), null, new Rect(left, y + 2, Math.Max(1, textView.Bounds.Width - left), line.Height - 4), 4, 4);
             }
-            if (row.Node.Type == "codeBlock") context.DrawRectangle(owner.PageColor("#F7F6F3", "#303843"), null, new Rect(x - 4, y, Math.Max(1, textView.Bounds.Width - x), line.Height), 5, 5);
-            if (row.Node.Type == "horizontalRule" && owner.DividerStyle != "none") context.DrawLine(new Pen(owner.PageLine, 1, owner.DividerStyle == "dotted" ? DashStyle.Dot : null), new(x, y + line.Height / 2), new(textView.Bounds.Width - 5, y + line.Height / 2));
-            if (row.Quote) context.DrawLine(new Pen(owner.PageLine, 2), new(x - 9, y + 2), new(x - 9, y + line.Height - 2));
-            // Only expanded toggle ancestors contribute a guide; list and quote indentation do not.
-            foreach (var depth in row.GuideDepths)
+            DrawRow(owner, context, row, y, line.Height, textView.Bounds.Width);
+            if (owner.DropTarget is { } drop && drop.IndicatorNode == row.Node.Id)
             {
-                var continues = row.Index + 1 < owner.Session.Projection.Rows.Length && owner.Session.Projection.Rows[row.Index + 1].GuideDepths.Contains(depth);
-                context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(depth) - inset, y), new(BlockLayout.GuideX(depth) - inset, y + line.Height - (continues ? 0 : 4)));
-            }
-            if (row.IsExpanded && line.Height > 25)
-                context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(row.Depth) - inset, y + 25), new(BlockLayout.GuideX(row.Depth) - inset, y + line.Height));
-            if (owner.DropTarget is { } drop && drop.Target == row.Block.Id)
-            {
-                var brush = Ui.Chrome("#7392AA");
+                var brush = Ui.Accent;
+                var targetX = Math.Max(4, BlockLayout.TextInset + drop.Depth * BlockLayout.Indent - inset);
                 if (drop.Placement == DropPlacement.Inside)
-                    context.DrawRectangle(Ui.Chrome("#E9F0F5"), new Pen(brush), new Rect(x - 6, y, Math.Max(1, textView.Bounds.Width - x), line.Height), 4, 4);
-                else
-                {
-                    var lineY = drop.Placement == DropPlacement.Before ? y : y + line.Height;
-                    context.DrawLine(new Pen(brush, 2), new(x, lineY), new(textView.Bounds.Width - 5, lineY));
-                }
+                    context.DrawRectangle(owner.PageColor("#EDF3FC", "#293F5C"), new Pen(brush, 1), new Rect(x - 6, y, Math.Max(1, textView.Bounds.Width - x), line.Height), 7, 7);
+                var lineY = drop.Placement == DropPlacement.Before ? y : y + line.Height;
+                context.DrawLine(new Pen(brush, 2, lineCap: PenLineCap.Round), new(targetX, lineY), new(textView.Bounds.Width - 6, lineY));
+                context.DrawEllipse(owner.PageBackgroundColor is { } color ? new SolidColorBrush(color) : Ui.Surface, new Pen(brush, 1.5), new Point(targetX, lineY), 3, 3);
             }
         }
+    }
+
+    private static void DrawRow(BlockEditor owner, DrawingContext context, BlockRow row, double y, double height, double width)
+    {
+        var inset = owner.PrefixInset(row);
+        var x = owner.TextStart(row);
+        if (row.Node.Type == "codeBlock") context.DrawRectangle(owner.PageColor("#F7F6F3", "#303843"), null, new Rect(x - 4, y, Math.Max(1, width - x), height), 7, 7);
+        if (row.Node.Type == "horizontalRule" && owner.DividerStyle != "none") context.DrawLine(new Pen(owner.PageLine, 1, owner.DividerStyle == "dotted" ? DashStyle.Dot : null), new(x, y + height / 2), new(width - 5, y + height / 2));
+        if (row.Quote || owner.PreviewQuote) context.DrawLine(new Pen(owner.PageLine, 2), new(x - 9, y + 2), new(x - 9, y + height - 2));
+        foreach (var depth in row.GuideDepths)
+        {
+            var continues = row.Index + 1 < owner.Session.Projection.Rows.Length && owner.Session.Projection.Rows[row.Index + 1].GuideDepths.Contains(depth);
+            context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(depth) - inset, y), new(BlockLayout.GuideX(depth) - inset, y + height - (continues ? 0 : 4)));
+        }
+        if (row.IsExpanded && height > 25)
+            context.DrawLine(new Pen(owner.PageLine, 1.5), new(BlockLayout.GuideX(row.Depth) - inset, y + 25), new(BlockLayout.GuideX(row.Depth) - inset, y + height));
     }
 }

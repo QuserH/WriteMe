@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Input.TextInput;
 using AvaloniaEdit;
-using AvaloniaEdit.Rendering;
 
 namespace WriteMe.Desktop.Editing;
 
@@ -19,6 +18,7 @@ public sealed class NativeInputClient : TextInputMethodClient
         editor.TextArea.Caret.PositionChanged += (_, _) => Refresh();
         editor.TextArea.SelectionChanged += (_, _) => Refresh();
         editor.TextArea.TextView.ScrollOffsetChanged += (_, _) => RaiseCursorRectangleChanged();
+        editor.TextArea.TextView.VisualLinesChanged += (_, _) => RaiseCursorRectangleChanged();
     }
 
     public override Visual TextViewVisual => _editor.TextArea.TextView;
@@ -27,16 +27,7 @@ public sealed class NativeInputClient : TextInputMethodClient
     private int SurroundingStart => _editor.Document.GetLineByOffset(_editor.SelectionStart).Offset;
     private int SurroundingEnd => _editor.Document.GetLineByOffset(_editor.SelectionStart + _editor.SelectionLength).EndOffset;
     public override string SurroundingText => _editor.Document.GetText(SurroundingStart, SurroundingEnd - SurroundingStart);
-    public override Rect CursorRectangle
-    {
-        get
-        {
-            var view = _editor.TextArea.TextView;
-            if (!view.VisualLinesValid) return new Rect(0, 0, 1, 28);
-            var point = view.GetVisualPosition(_editor.TextArea.Caret.Position, VisualYPosition.TextTop) - view.ScrollOffset;
-            return new(point, new Size(1, view.DefaultLineHeight));
-        }
-    }
+    public override Rect CursorRectangle => BlockCaretGeometry.GetRectangle(_editor);
     public override TextSelection Selection
     {
         get => new(_editor.SelectionStart - SurroundingStart, _editor.SelectionStart + _editor.SelectionLength - SurroundingStart);

@@ -13,9 +13,10 @@ internal static partial class Ui
     public static readonly SolidColorBrush Muted = Chrome("#92979E");
     public static readonly SolidColorBrush Line = Chrome("#ECEEF0");
     public static readonly SolidColorBrush Surface = Chrome("#FFFFFF");
-    public static readonly SolidColorBrush Shell = Chrome("#FBFCFD");
+    public static readonly SolidColorBrush Shell = Chrome("#FCFDFE");
     public static readonly SolidColorBrush Subtle = Chrome("#F0F2F5");
     public static readonly SolidColorBrush Accent = Chrome("#4A78C5");
+    public static BoxShadows FloatingShadow => BoxShadows.Parse("0 4 9 0 #12000000, 0 16 16 0 #0F000000, 0 36 22 0 #0A000000");
 
     public static SolidColorBrush Chrome(string value)
     {
@@ -28,6 +29,9 @@ internal static partial class Ui
     {
         var color = Color.Parse(value);
         if (!_dark) return color;
+        if (value == "#FAFAFA") return Color.Parse("#2A2E34");
+        if (value == "#F1F1F2") return Color.Parse("#363B43");
+        if (value == "#EDEEEF") return Color.Parse("#424750");
         var maximum = Math.Max(color.R, Math.Max(color.G, color.B)); var minimum = Math.Min(color.R, Math.Min(color.G, color.B));
         if (value == "#FFFFFF") return Color.Parse("#252A31");
         if (value is "#FBFCFD" or "#FCFDFE" or "#F4F5F7") return Color.Parse("#1B2027");

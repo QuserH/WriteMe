@@ -23,7 +23,7 @@ M3 继续补充文字颜色：选区需要同时保留粗体、链接和高亮�
 
 ### C# 原生版
 
-- `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` 在原生编辑视口内绘制白色圆角浮层，替换正文上方的常驻工具栏。选中文字后显示，拖选、块拖动、中文预编辑、代码/未知块选区、光标折叠、视口外选区与外部焦点时隐藏。普通折叠三角与此前的悬停手柄规则保持独立。
+- `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` 在原生编辑视口内绘制 14px 圆角浅灰浮层，表面与分层阴影共用原生菜单主题，替换正文上方的常驻工具栏。选中文字后显示，拖选、块拖动、中文预编辑、代码/未知块选区、光标折叠、视口外选区与外部焦点时隐藏。普通折叠三角与此前的悬停手柄规则保持独立。
 - `SelectionFormats` 从 C# 文档投影读取选中文字的真实 marks，粗体、斜体、下划线、删除线和代码按钮用原生 ToggleButton 表示未设置、全部设置或混合状态，并提供中文无障碍说明。`TextColorCoverage` 与 `UniformTextColor` 单独读取颜色，不因 textStyle 的其他属性不同而误判同色选区；不同颜色或部分着色显示混合。高亮提供五个色块及移除；清除格式只影响选中文字，不改变层级或隐藏子树。
 - 浮层保存文档会话、修订号、选区方向和文字范围。普通格式操作保持选区并进入统一历史；链接、高亮和块转换面板的回调还核对打开时的目标快照，旧草稿即使延迟回调也不能作用于另一篇笔记或新的选区。文档修改或切换会放弃草稿。
 - Ctrl+K 在浮层内打开链接表单。光标位于链接时跨相邻、具有相同 link 属性的文字 run 扩展，粗体/斜体分段不会截断链接；不同链接、无链接文字和段落边界停止扩展。已有链接预填地址，修改保留已有 link 属性，支持移除、取消与就地错误提示。原生 TextPresenter 的 PreeditText 非空时，确认候选的 Enter/Escape 不提交或关闭表单。
@@ -44,7 +44,7 @@ M3 继续补充文字颜色：选区需要同时保留粗体、链接和高亮�
 ## Verification
 
 - Web 的 `npm run test:editor` 包括精确文字范围、连续样式与单步撤销、混合 mark 清除、折叠标题高亮刷新、链接验证/取消/更新/移除、Alt+F10 与 Tab 缩进并存、跨段和跨屏选区、窄窗口和滚动隐藏。保存断言等待 800ms 自动保存完成；浏览器 Selection 测试等待 selectionchange 进入 PM。
-- 原生 `npm run native:test` 共 153 项通过，其中 `FormattingTests.cs` 的 19 项覆盖格式混合状态、跨软换行切换、重复应用幂等、实际指针点击的精确范围、跨 marks 链接预填与更新/撤销、链接地址验证与中文预编辑、草稿跨修订/文档失效、键盘连续操作、外部焦点、拖选隐藏、窄视口与真实滚轮事件、组合文字渲染和窗口关闭后的 SQLite 保存。侧栏复用与切换覆盖在 `CraftInteractionTests.cs`；`NativeEditorTests.cs` 另验证缩进续行的选区矩形、粗体高亮、中文预编辑和点击坐标。
+- 原生 `npm run native:test` 共 208 项通过，其中 `FormattingTests.cs` 的 19 项覆盖格式混合状态、跨软换行切换、重复应用幂等、实际指针点击的精确范围、跨 marks 链接预填与更新/撤销、链接地址验证与中文预编辑、草稿跨修订/文档失效、键盘连续操作、外部焦点、拖选隐藏、窄视口与真实滚轮事件、组合文字渲染和窗口关闭后的 SQLite 保存。侧栏复用与切换覆盖在 `CraftInteractionTests.cs`；`NativeEditorTests.cs` 另验证缩进续行的选区矩形、粗体高亮、中文预编辑和点击坐标。
 - `TextColorTests.cs` 的 6 项覆盖精确范围、重复同色无历史、默认恢复保留其他 textStyle 属性、JSON 往返、中文/emoji/软换行、隐藏子树和代码保留，以及浮层/右栏双入口的真实文字 run 色值、非法输入、预编辑、旧文档草稿失效和撤销。隔离 SQLite 的窗口测试同时验证文字色与空待办退出在关闭后保存；820×560 窗口检查颜色面板与自定义输入可用。`artifacts/native-m3-qa/` 的正常侧栏、窄窗口和浮层 PNG 已逐图检查。
 - `NativeWindowSavesFloatingToolbarFormattingAndRendersTheCompactPanels` 在隔离库中通过窗口和控件操作保存粗体/高亮/链接，并重新读库核对正文与折叠树。设置 `WRITEME_QA_ARTIFACTS` 可输出原生 headless 渲染的工具栏、高亮和链接面板 PNG，用于视觉检查；此验证不等同于实际系统 IME 或其他平台验收。
 

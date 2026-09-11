@@ -109,11 +109,11 @@ public sealed partial class DocumentSession
         return true;
     }
 
-    public bool InsertLayoutCommand(int offset, int prefixLength, string kind, int count = 2)
+    public bool InsertLayoutCommand(int offset, int prefixLength, string kind, int count = 2, int? tableColumns = null)
     {
         var row = Projection.At(offset);
         if (row.IsAtomic || prefixLength < 0 || prefixLength > row.Text.Length || kind is not ("table" or "columnList")) return false;
-        var block = kind == "table" ? LayoutBlocks.Table() : LayoutBlocks.Columns(count);
+        var block = kind == "table" ? tableColumns is { } columns ? LayoutBlocks.Table(count, columns) : LayoutBlocks.Table() : LayoutBlocks.Columns(count);
         // A slash command replaces its own empty paragraph; any following text and owning subtree survive.
         var remaining = RichText.Splice(row.Node, 0, prefixLength, "");
         var root = NoteTree.Update(Root, row.Node.Id, _ => remaining);

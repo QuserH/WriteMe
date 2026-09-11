@@ -11,7 +11,7 @@ public enum SidebarSymbol
     Plus, Format, Outline, Close, Search, Folder, Document, Sidebar, Text, Heading1, Heading2, Heading3,
     Toggle, BulletList, OrderedList, Task, Quote, Code, Divider,
     Bold, Italic, Underline, Strike, Link, Clear, Indent, Outdent, Expand, Collapse, Check, NoColor, Paint, Info, Image, Attachment, Star, Clock,
-    Table, Columns, AddRow, AddColumn, More, Unwrap, AlignLeft, AlignCenter, AlignRight, AlignJustify, Grid, Trash, Settings, Calendar, Tag, Undo, Redo
+    Table, Columns, AddRow, AddColumn, More, Unwrap, AlignLeft, AlignCenter, AlignRight, AlignJustify, Grid, Trash, Settings, Calendar, Tag, Undo, Redo, ChevronRight
 }
 
 // Small vector controls keep icon weight and alignment independent of Unicode fallback fonts.
@@ -21,6 +21,7 @@ public sealed class SidebarGlyph : Control
     public SidebarSymbol Symbol { get => _symbol; set { _symbol = value; InvalidateVisual(); } }
     private static readonly IReadOnlyDictionary<SidebarSymbol, Geometry> Paths = new Dictionary<SidebarSymbol, string>
     {
+        [SidebarSymbol.ChevronRight] = "M9 5 L16 12 L9 19",
         [SidebarSymbol.Plus] = "M12 5 V19 M5 12 H19",
         [SidebarSymbol.Table] = "M4 3 H20 Q21 3 21 4 V20 Q21 21 20 21 H4 Q3 21 3 20 V4 Q3 3 4 3 M3 9 H21 M3 15 H21 M9 3 V21 M15 3 V21",
         [SidebarSymbol.Columns] = "M4 3 H20 Q21 3 21 4 V20 Q21 21 20 21 H4 Q3 21 3 20 V4 Q3 3 4 3 M12 3 V21",

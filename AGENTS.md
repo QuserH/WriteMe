@@ -20,6 +20,8 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 |---|---|---|
 | 桌面界面 | C# / .NET 10 / Avalonia，本机绘制，无 WebView | `native/WriteMe.Desktop/` |
 | 编辑表面 | AvaloniaEdit，文字排版/输入/选区/视口虚拟化 | `native/WriteMe.Desktop/Editing/` |
+| 斜杠菜单 | 分类/二级导航、全局搜索、原子命令与区域浮层 | Desktop 的 `Editing/SlashCommandMenu.cs` / `BlockEditor.Commands.cs`，Core 的 `SlashCommands.cs` |
+| 拖动预览与光标 | 可见子树只读预览、按文字度量的光标与预编辑 | `native/WriteMe.Desktop/Editing/BlockDragPreview.cs` / `BlockCaretGeometry.cs` |
 | 选区格式 | 原生浮动工具栏、文字色/高亮、链接草稿、键盘导航 | `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` / `TextColorPicker.cs`，核心在 `native/WriteMe.Core/SelectionFormats.cs` / `TextColor.cs` |
 | 左侧导航 | 空间/当前文档模式、标题目录、隐藏标题定位 | `native/WriteMe.Desktop/Editing/DocumentOutlinePane.cs`，布局与模式在 `MainWindow.axaml` / `.cs`，目录模型在 `native/WriteMe.Core/DocumentTools.cs` |
 | 右侧工具 | 纸张外的插入/格式/样式/信息横向标签、收起胶囊、双侧栏响应布局 | `native/WriteMe.Desktop/Editing/EditorSidebar.cs` / `SidebarGlyph.cs`，扩展面板在 `MainWindow.Appearance.cs` |
@@ -32,7 +34,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 折叠排版 | 矢量三角、28px 标记列/缩进、长标题续行与选区坐标 | `native/WriteMe.Desktop/Editing/ToggleDisclosureButton.cs` / `BlockRendering.cs` / `BlockTextFormatter.cs` |
 | 文档核心 | 不可变文档树、TipTap JSON、可见投影、富文本、统一历史、结构移动 | `native/WriteMe.Core/` |
 | 本地存储 | Microsoft.Data.Sqlite，独立原生库及旧库在线备份导入 | `native/WriteMe.Core/NoteStore.cs` |
-| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 180 项，含真实 HTTP | `native/WriteMe.Tests/` |
+| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 208 项，含真实 HTTP | `native/WriteMe.Tests/` |
 | 发布 | 自带 .NET 运行时的 Windows 目录；最近成功版本清单 | `scripts/Publish-Native.ps1` / `Start-Native.ps1` → `artifacts/native/` |
 
 ### 保留的 Web / Tauri 基线
@@ -90,6 +92,7 @@ npm run init-board          # 生成决策看板 board.html
 - 两个原生 PowerShell 脚本保留 UTF-8 BOM，Windows PowerShell 5 读取无 BOM 中文会误解析。发布时若同目录程序在运行，使用 `npm run native:release -- -OutputDirectory artifacts/native/<版本目录>`，不要强行关闭用户程序。成功发布才更新最近版本清单；用户关闭旧窗口后自行启动新版。
 - 用户已要求自行测试，不要控制其桌面窗口。UI 自动验证用 Avalonia headless 与隔离资料库；`WRITEME_QA_ARTIFACTS` 可指定格式浮层、折叠和右侧工具栏的 PNG 输出目录，供渲染检查。
 - AvaloniaEdit 11.4.1 的 `ScrollToVerticalOffset` 是空实现；拖动边缘滚动要更新模板 ScrollViewer 的 Offset，不能只改变 TextView 后又被容器旧值覆盖。
+- 默认 Caret 按整行高度绘制，会包含 28/36px 块留白。`BlockCaretGeometry` 按当前文字字体和基线裁剪原生 CaretLayer，保留原有闪烁与焦点，IME 和预编辑共用坐标。通过固定版本的层类型名识别；升级 AvaloniaEdit 必须验证实际光标像素、标题/正文、软换行、行距和中文定位，不能只检查模型。
 - AvaloniaEdit 11.4.1 的继承换行缩进没有实际生效，Avalonia 11.3.21 也不实现段落 Indent。`BlockTextFormatter` 只在本编辑器的 TextView 装配续行适配，保留原生文字索引和断行缓存；绘制、命中、选区矩形必须一起平移。三个 `UnsafeAccessor` 绑定固定包的字段/构造签名，升级排版包必须重新验证长标题、软换行、点击与中文光标，公开接口补齐后删除适配。禁止用实际空格/换行污染正文来模拟缩进。
 - Rust 装在 `%USERPROFILE%\.cargo`，**当前 shell PATH 不含 cargo**：命令行用完整路径
   `$env:USERPROFILE\.cargo\bin\cargo.exe`；`npm run release` 脚本开头会把该目录注入 PATH。
@@ -108,6 +111,9 @@ npm run init-board          # 生成决策看板 board.html
 - `documents(id, title, content, created_at, updated_at)`，WAL；两版 `content` 均使用 **TipTap 块 JSON 字符串**。原生 `NoteJson` 兼容旧纯文本、旧空折叠标题、marks 与未知节点；Web 由 `src/editor/doc.ts#parseContent` 迁移。两个资料库后续修改独立，不做双向同步。
 - 新增块类型/序列化改动同步原生 `NoteJson`、`DocumentProjection`、相关回归与原生决策笔记；涉及 Web 时同步 `src/editor/doc.ts` 与 [M1 决策笔记](.agents/notes/implemented/feature/2026-09-08-m1-tiptap-block-editor.md)。保持旧 `src/lib/api.ts` 契约。
 - 原生文字、格式、折叠、拖动都经过 `DocumentSession`，共用 200 项有界历史；不要另开 UI 撤销栈。原生 650ms 自动保存在后台串行完成，切换和关闭必须等待保存。相同标题与正规化正文的保存必须无操作；Avalonia 标题变更事件会延后触发，不能只用 `_loading` 阻止远端显示刷新置脏。
+- `/` 先分类再进入二级菜单；确认叶项才通过 `ApplySlash` 原子移除查询并应用，格式/颜色/缩进用分离草稿提交一次根历史。输入焦点保留，旧按钮、Revision、选区、前缀、IME 与 `IsEffectivelyEnabled` 都须核对。插入侧栏继续复用独立的 `BlockCommand.All/Search`。
+- 区域浮层通过 `OverlayOwner/MountOverlay` 挂到根编辑区，不能被单元格裁剪；IME、取消拖动、当前菜单优先于区域 Tab/Escape。`DetachedFromVisualTree` 期间只隐藏并释放状态，归还浮层延到 Dispatcher，不能同步修改 Avalonia 正遍历的祖先子集合。
+- 拖动深度按抓取点的横向位移以 28px 一档计算，不用文字起点的绝对阈值；`CanMove` 与提交共用合法性判断，展开块后的提示线在最后一个可见后代后。预览复用只读原生表面及单元格行高，宽度与断行取源区域，长子树保留有限视口；取消/释放/关闭必须释放预览。
 - 表格/分栏使用 TipTap 复合节点，单元格与栏通过 `CreateScope` 提交到根会话；历史记录事务前后选区，重做不能从后续导航位置推断光标。父表面通过 `LayoutHost` 定位内部节点，父键盘处理不能截获子区域事件。范围选择期间焦点留在父 TextArea 以保留 IME；提交文字先结束预编辑，再执行范围替换。
 - 复合块缓存控件必须同步字体、行距、底色、文字色、分割线、主题和关联目录，不能只在创建时复制设置。`PrefixInset/TextStart` 统一紧凑区域的续行、层级线、命中和拖放。表格最多 100×12，合并单元格保留但不可编辑；列宽用标准 `colwidth: [px]`，拖动只在松手时提交，轻点/Esc/捕获丢失不落盘。完整规则见 [原生表格与分栏](.agents/notes/implemented/feature/2026-09-11-native-tables-columns-and-editing.md)。
 - 链接/高亮显式应用调用 `Format(..., toggle: false)`，普通格式按钮使用开关语义。浮层草稿必须核对会话、修订号与选区；核心规则见 [格式工具栏](.agents/notes/implemented/feature/2026-09-09-text-formatting-toolbar.md)。

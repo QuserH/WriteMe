@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Input.TextInput;
 using Avalonia.Interactivity;
@@ -17,6 +16,8 @@ using AvaloniaEdit.Rendering;
 using WriteMe.Core;
 
 namespace WriteMe.Desktop.Editing;
+
+internal sealed record BlockDropTarget(Guid Target, DropPlacement Placement, Guid IndicatorNode, int Depth);
 
 public sealed record BlockCommand(string Name, string Kind, string Icon, string Aliases, int Level = 1)
 {
@@ -54,8 +55,11 @@ public sealed partial class BlockEditor : UserControl
     public Func<string, string?>? ResolveAsset { get; set; }
     public event Action<NoteNode>? AssetInvoked;
     private readonly Dictionary<string, Bitmap> _assetImages = [];
-    private readonly TextBlock _ghostText = new() { TextWrapping = TextWrapping.Wrap, MaxLines = 3, FontSize = 13, Foreground = Ui.Ink };
-    private readonly Border _ghost = new() { IsVisible = false, IsHitTestVisible = false, Background = Ui.Surface, BorderBrush = Ui.Line, BorderThickness = new(1), CornerRadius = new(9), Padding = new(14, 10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, ZIndex = 60 };
+    private BlockDragPreview? _ghostPreview;
+    private IReadOnlyList<BlockRow> _dragRows = [];
+    private int _dragDepth;
+    private Vector _ghostGrabOffset;
+    private readonly Border _ghost = new() { IsVisible = false, IsHitTestVisible = false, Background = Ui.Surface, BorderBrush = Ui.Line, BorderThickness = new(1), CornerRadius = new(12), Padding = new(6), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, ZIndex = 60 };
     // Note: 设置滑块即时控制实际指针预览，偏好只留本机 — 见 .agents/notes/implemented/feature/2026-09-09-settings-ghost-opacity.md
     public double GhostOpacity
     {
@@ -77,12 +81,9 @@ public sealed partial class BlockEditor : UserControl
     public event EventHandler? SelectionChanged;
     public event Action<string>? Notice;
     internal bool IsInteracting => _pointerSelecting || _dragSource != null || _commands.IsVisible || References?.IsVisible == true;
-    internal (Guid Target, DropPlacement Placement)? DropTarget { get; private set; }
+    internal BlockDropTarget? DropTarget { get; private set; }
     internal Guid? HoveredBlockId { get; private set; }
     private readonly Grid _layout = new();
-    private readonly Border _commands;
-    private readonly ListBox _commandList;
-    private readonly TextBlock _commandEmpty = new() { Text = "没有匹配的块类型", Foreground = Ui.Muted, Margin = new(14), IsVisible = false };
     private readonly Border _preedit;
     private readonly TextBlock _preeditText = new() { FontSize = 15, Foreground = Ui.Ink, TextDecorations = TextDecorations.Underline };
     private readonly DispatcherTimer _dragScroll = new() { Interval = TimeSpan.FromMilliseconds(30) };
@@ -96,14 +97,13 @@ public sealed partial class BlockEditor : UserControl
     private Point _dragPointer;
     private bool _dragging;
     private IPointer? _capturedPointer;
-    private string? _dismissedQuery;
-    private int _queryStart;
-    private int _queryLength;
 
-    public BlockEditor(DocumentSession session, bool compact = false)
+    public BlockEditor(DocumentSession session, bool compact = false, bool preview = false)
     {
         Session = session;
         IsCompact = compact;
+        IsDragPreview = preview;
+        if (preview) { IsHitTestVisible = false; Focusable = false; Surface.IsReadOnly = true; Surface.TextArea.Focusable = false; }
         AutomationProperties.SetName(Surface, "笔记正文");
         AutomationProperties.SetName(Surface.TextArea, "笔记正文");
         Surface.Background = Brushes.Transparent;
@@ -146,43 +146,24 @@ public sealed partial class BlockEditor : UserControl
         Surface.TextArea.TextView.LineTransformers.Add(new BlockStyleTransformer(this));
         Surface.TextArea.TextView.BackgroundRenderers.Add(new BlockBackgroundRenderer(this));
         _layout.Children.Add(Surface);
-        _commandList = new ListBox { Background = Brushes.Transparent, MaxHeight = 316, Padding = new(6), BorderThickness = new(0) };
-        _commandList.ItemTemplate = new FuncDataTemplate<BlockCommand>((item, _) =>
-        {
-            var grid = new Grid { ColumnDefinitions = new("34,*"), Margin = new(0, 2) };
-            grid.Children.Add(new TextBlock { Text = item?.Icon, FontSize = 15, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center });
-            var label = new TextBlock { Text = item?.Name, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(label, 1);
-            grid.Children.Add(label);
-            return grid;
-        });
-        AutomationProperties.SetName(_commandList, "块类型菜单");
-        var commandsContent = new StackPanel();
-        commandsContent.Children.Add(new TextBlock { Text = "插入或转换为", Foreground = Ui.Muted, FontSize = 10, Margin = new(14, 11, 0, 3) });
-        commandsContent.Children.Add(_commandList);
-        commandsContent.Children.Add(_commandEmpty);
-        _commands = new Border
-        {
-            Child = commandsContent, Width = 260, IsVisible = false, Background = Ui.Surface,
-            BorderBrush = Ui.Line, BorderThickness = new(1), CornerRadius = new(9),
-            BoxShadow = new BoxShadows(new BoxShadow { Blur = 20, OffsetY = 5, Color = Color.Parse("#19000000") }),
-            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top
-        };
-        _layout.Children.Add(_commands);
+        if (!preview) InitializeCommands();
         _preedit = new Border { Child = _preeditText, Background = Ui.Surface, IsVisible = false, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         _layout.Children.Add(_preedit);
         Content = _layout;
 
         InputClient = new(Surface);
+        if (!preview) BlockCaretGeometry.Attach(Surface);
         Formatting = new(this);
-        _layout.Children.Add(Formatting);
+        if (!preview) _layout.Children.Add(Formatting);
         References = new(this);
-        _layout.Children.Add(References);
-        _ghost.Child = _ghostText; _ghost.Opacity = .85;
-        _ghost.BoxShadow = new(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.Parse("#30000000") });
-        AutomationProperties.SetAutomationId(_ghost, "DragGhost"); _layout.Children.Add(_ghost);
+        if (!preview) _layout.Children.Add(References);
+        _ghost.Opacity = .85;
+        _ghost.BoxShadow = Ui.FloatingShadow;
+        if (!preview) { AutomationProperties.SetAutomationId(_ghost, "DragGhost"); _layout.Children.Add(_ghost); }
         Surface.TextArea.AddHandler(InputElement.TextInputMethodClientRequestedEvent, (_, e) => { if (!OwnsInput(e.Source)) return; e.Client = InputClient; e.Handled = true; }, RoutingStrategies.Bubble, handledEventsToo: true);
         InputClient.PreeditChanged += (_, _) => UpdatePreedit();
+        Surface.TextArea.TextView.VisualLinesChanged += (_, _) => { if (InputClient.IsComposing) UpdatePreedit(); };
+        Surface.TextArea.TextView.ScrollOffsetChanged += (_, _) => { if (InputClient.IsComposing) UpdatePreedit(); };
         Surface.TextArea.GotFocus += (_, e) => { if (OwnsInput(e.Source)) Activate(); };
         Surface.AddHandler(TextInputEvent, HandleAtomicText, RoutingStrategies.Tunnel);
         Surface.TextArea.TextEntered += (_, _) => { InputClient.SetPreeditText(null); UpdateCommands(); };
@@ -217,10 +198,14 @@ public sealed partial class BlockEditor : UserControl
         Surface.PointerCaptureLost += (_, _) => { CancelDrag(); _pointerSelecting = false; Formatting.QueueRefresh(); };
         Surface.PointerExited += (_, _) => { if (_dragSource == null) SetHoveredBlock(null); };
         Surface.LostFocus += (_, _) => { if (!_commands.IsPointerOver) DismissCommands(); };
-        _commandList.PointerReleased += (_, _) => ApplySelectedCommand();
         Session.Changed += SessionChanged;
         _dragScroll.Tick += (_, _) => ScrollDrag();
-        DetachedFromVisualTree += (_, _) => { _dragScroll.Stop(); InputClient.Cancel(); ClearAssetCache(); };
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _detaching = true;
+            try { CancelDrag(); HideCommands(); InputClient.Cancel(); ClearAssetCache(); }
+            finally { _detaching = false; }
+        };
         SyncSurface();
     }
 
@@ -294,6 +279,7 @@ public sealed partial class BlockEditor : UserControl
     private void SessionChanged(object? sender, EventArgs args)
     {
         if (_dragSource != null) CancelDrag();
+        if (!_editing && _commands.IsVisible) HideCommands();
         if (_editing)
         {
             Surface.TextArea.TextView.Redraw();
@@ -367,26 +353,15 @@ public sealed partial class BlockEditor : UserControl
                 e.Handled = true;
             return;
         }
+        if (_dragSource != null && e.Key == Key.Escape) { CancelDrag(); e.Handled = true; return; }
+        if (References.HandleKey(e) || _commands.HandleKey(e)) return;
         if (HandleLayoutKey(e)) return;
         var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        if (References.HandleKey(e)) return;
         if (control && shift && e.Key == Key.K) { References.Open(); e.Handled = true; return; }
         if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Alt) && ActivateReference(Surface.CaretOffset, true)) { e.Handled = true; return; }
         if (e.Key == Key.Escape) { CancelDrag(); DismissCommands(); Formatting.Dismiss(); e.Handled = true; return; }
         if (e.Key == Key.F10 && e.KeyModifiers.HasFlag(KeyModifiers.Alt)) { Formatting.FocusToolbar(); e.Handled = true; return; }
-        if (_commands.IsVisible && !control)
-        {
-            if (e.Key is Key.Down or Key.Up)
-            {
-                var count = _commandList.ItemCount;
-                if (count > 0) _commandList.SelectedIndex = (_commandList.SelectedIndex + (e.Key == Key.Down ? 1 : -1) + count) % count;
-                _commandList.ScrollIntoView(_commandList.SelectedItem!);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.Enter) { ApplySelectedCommand(); e.Handled = true; return; }
-        }
         if (control)
         {
             if (e.Key == Key.Z) { if (shift) Session.Redo(); else Session.Undo(); FocusHistorySelection(); e.Handled = true; return; }
@@ -451,58 +426,27 @@ public sealed partial class BlockEditor : UserControl
         _preeditText.Text = InputClient.Preedit;
         if (InputClient.IsComposing)
         {
-            var point = CaretPoint();
-            _preedit.Margin = new(Math.Max(0, point.X), Math.Max(0, point.Y - 27), 0, 0);
+            var properties = BlockCaretGeometry.GetTextProperties(Surface);
+            _preeditText.FontFamily = properties?.Typeface.FontFamily ?? Surface.FontFamily;
+            _preeditText.FontSize = properties?.FontRenderingEmSize ?? Surface.FontSize;
+            _preeditText.FontWeight = properties?.Typeface.Weight ?? FontWeight.Normal;
+            _preeditText.FontStyle = properties?.Typeface.Style ?? FontStyle.Normal;
+            _preeditText.Foreground = properties?.ForegroundBrush ?? Surface.Foreground;
+            _preedit.Background = PageBackgroundColor is { } color ? new SolidColorBrush(color) : Ui.Surface;
+            var point = Surface.TextArea.TextView.TranslatePoint(InputClient.CursorRectangle.TopLeft, _layout) ?? default;
+            _preedit.Margin = new(Math.Max(0, point.X), Math.Max(0, point.Y), 0, 0);
             DismissCommands();
         }
     }
 
-    private void UpdateCommands()
-    {
-        if (_syncing || _editing || InputClient.IsComposing || Surface.SelectionLength != 0 || Surface.Document.TextLength != Session.Projection.Text.Length) return;
-        var row = Session.Projection.At(Surface.CaretOffset);
-        var length = Math.Clamp(Surface.CaretOffset - row.Start, 0, row.Text.Length);
-        var prefix = row.Text[..length];
-        if (!prefix.StartsWith('/') || prefix.Length > 48 || row.Node.Type == "codeBlock" || row.IsAtomic)
-        {
-            _commands.IsVisible = false;
-            _dismissedQuery = null;
-            return;
-        }
-        if (_dismissedQuery == $"{row.Node.Id}:{prefix}") return;
-        var items = BlockCommand.Search(prefix[1..].Trim());
-        _commandList.ItemsSource = items;
-        _commandList.SelectedIndex = items.Length > 0 ? 0 : -1;
-        _commandEmpty.IsVisible = items.Length == 0;
-        _queryStart = row.Start;
-        _queryLength = length;
-        _commands.IsVisible = true;
-        var point = CaretPoint();
-        _commands.Margin = new(Math.Clamp(point.X, 0, Math.Max(0, Bounds.Width - 266)), Math.Clamp(point.Y + 5, 0, Math.Max(0, Bounds.Height - 368)), 0, 0);
-    }
-
-    private void DismissCommands()
-    {
-        if (_commands.IsVisible)
-        {
-            var row = Session.Projection.At(Surface.CaretOffset);
-            _dismissedQuery = $"{row.Node.Id}:{row.Text[..Math.Clamp(Surface.CaretOffset - row.Start, 0, row.Text.Length)]}";
-        }
-        _commands.IsVisible = false;
-    }
-
-    private void ApplySelectedCommand()
-    {
-        if (!_commands.IsVisible || _commandList.SelectedItem is not BlockCommand command) return;
-        DismissCommands();
-        if (command.Kind is "table" or "columnList") Session.InsertLayoutCommand(_queryStart + _queryLength, _queryLength, command.Kind, command.Level);
-        else Session.ConvertBlock(_queryStart + _queryLength, command.Kind, command.Level, _queryLength);
-        FocusText();
-    }
-
     internal void BeginBlockDrag(BlockRow row, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(Surface).Properties.IsLeftButtonPressed || InputClient.IsComposing) return;
+        if (!e.GetCurrentPoint(Surface).Properties.IsLeftButtonPressed || InputClient.IsComposing || !IsEffectivelyEnabled) return;
+        DismissCommands(); Formatting.Dismiss(); References.Dismiss();
+        var nodeIds = NoteTree.Descendants(row.Block).Select(node => node.Id).ToHashSet();
+        _dragRows = Session.Projection.Rows.Where(candidate => nodeIds.Contains(candidate.Node.Id)).ToArray();
+        if (_dragRows.Count == 0) return;
+        _dragDepth = row.Depth;
         _dragSource = row.Block.Id;
         SetHoveredBlock(row.Block.Id);
         _dragStart = _dragPointer = e.GetPosition(Surface.TextArea.TextView);
@@ -518,17 +462,23 @@ public sealed partial class BlockEditor : UserControl
         if (_dragSource == null) { UpdateHover(e.GetPosition(Surface.TextArea.TextView)); return; }
         _dragPointer = e.GetPosition(Surface.TextArea.TextView);
         if (!_dragging && Math.Sqrt(Math.Pow(_dragPointer.X - _dragStart.X, 2) + Math.Pow(_dragPointer.Y - _dragStart.Y, 2)) < 5) return;
-        _dragging = true;
-        if (_dragSource is { } source && NoteTree.Find(Session.Root, source) is { } node)
+        if (!_dragging)
         {
-            var text = DocumentText.Plain(node);
-            _ghostText.Text = text.Length == 0 ? "移动块" : text[..Math.Min(text.Length, 120)];
-            _ghost.Width = Math.Max(100, Math.Min(300, Bounds.Width - 20));
-            var point = Surface.TextArea.TextView.TranslatePoint(_dragPointer, this) ?? _dragPointer;
-            _ghost.Margin = new(Math.Clamp(point.X + 14, 0, Math.Max(0, Bounds.Width - _ghost.Width)), Math.Clamp(point.Y + 14, 0, Math.Max(0, Bounds.Height - 100)), 0, 0);
+            _ghostPreview = new(this, _dragRows[0], _dragRows);
+            _ghost.Child = _ghostPreview;
+            _ghost.Width = _ghostPreview.Width + 14;
+            _ghost.Height = _ghostPreview.Height + 14;
+            _ghost.Background = PageBackgroundColor is { } color ? new SolidColorBrush(color) : Ui.Surface;
+            _ghost.BorderBrush = PageLine;
+            _ghostGrabOffset = new(_ghostPreview.SourceLeft - _dragStart.X - 7, _ghostPreview.SourceTop - _dragStart.Y - 7);
+            MountOverlay(_ghost);
             _ghost.IsVisible = true;
+            _dragging = true;
+            _dragScroll.Start();
         }
-        _dragScroll.Start();
+        var point = Surface.TextArea.TextView.TranslatePoint(_dragPointer, OverlayOwner._layout) ?? _dragPointer;
+        _ghost.Margin = new(Math.Max(0, point.X + _ghostGrabOffset.X),
+            Math.Max(0, point.Y + _ghostGrabOffset.Y), 0, 0);
         UpdateDrop();
         e.Handled = true;
     }
@@ -570,7 +520,7 @@ public sealed partial class BlockEditor : UserControl
     private void UpdateDrop()
     {
         var view = Surface.TextArea.TextView;
-        if (!view.VisualLinesValid || view.VisualLines.Count == 0) return;
+        if (!view.VisualLinesValid || view.VisualLines.Count == 0 || _dragSource is not { } sourceId) { DropTarget = null; return; }
         if (_dragPointer.X < 0 || _dragPointer.X > view.Bounds.Width || _dragPointer.Y < 0 || _dragPointer.Y > view.Bounds.Height)
         {
             DropTarget = null;
@@ -581,8 +531,12 @@ public sealed partial class BlockEditor : UserControl
         var line = view.VisualLines.MinBy(l => y < l.VisualTop ? l.VisualTop - y : y > l.VisualTop + l.Height ? y - l.VisualTop - l.Height : 0)!;
         var row = Session.Projection.At(line.FirstDocumentLine.Offset);
         var relative = (y - line.VisualTop) / line.Height;
-        var placement = relative < .25 ? DropPlacement.Before : relative > .75 ? DropPlacement.After : row.IsToggle ? DropPlacement.Inside : DropPlacement.After;
-        while (row.Depth > 0 && _dragPointer.X < BlockLayout.TextInset - 16 + row.Depth * BlockLayout.Indent - PrefixInset(row))
+        // Match the level change to the horizontal drag from the actual grab point.
+        // Absolute text coordinates overshoot by a level because a grip sits left of its text.
+        var depth = Math.Max(0, _dragDepth + (int)Math.Round((_dragPointer.X - _dragStart.X) / BlockLayout.Indent, MidpointRounding.AwayFromZero));
+        var placement = row.IsToggle && depth > row.Depth && relative is >= .2 and <= .8
+            ? DropPlacement.Inside : relative < .5 ? DropPlacement.Before : DropPlacement.After;
+        while (row.Depth > depth)
         {
             var parent = NoteTree.Parent(Session.Root, row.Block.Id);
             if (parent?.Type != "toggleBlock") break;
@@ -591,8 +545,17 @@ public sealed partial class BlockEditor : UserControl
             row = parentRow;
             placement = DropPlacement.After;
         }
-        var source = _dragSource == null ? null : NoteTree.Find(Session.Root, _dragSource.Value);
-        DropTarget = source == null || NoteTree.Find(source, row.Block.Id) != null ? null : (row.Block.Id, placement);
+        if (!Session.CanMove(sourceId, row.Block.Id, placement)) DropTarget = null;
+        else
+        {
+            var indicator = row;
+            if (placement == DropPlacement.After)
+            {
+                var ids = NoteTree.Descendants(row.Block).Select(node => node.Id).ToHashSet();
+                indicator = Session.Projection.Rows.Skip(row.Index).TakeWhile(candidate => ids.Contains(candidate.Node.Id)).Last();
+            }
+            DropTarget = new(row.Block.Id, placement, indicator.Node.Id, row.Depth + (placement == DropPlacement.Inside ? 1 : 0));
+        }
         view.InvalidateLayer(KnownLayer.Background);
     }
 
@@ -611,6 +574,7 @@ public sealed partial class BlockEditor : UserControl
     {
         if (_dragSource is not { } source) return;
         var dragging = _dragging;
+        if (dragging) { _dragPointer = e.GetPosition(Surface.TextArea.TextView); UpdateDrop(); }
         var drop = DropTarget;
         CancelDrag();
         if (dragging && drop is { } target) Session.Move(source, target.Target, target.Placement);
@@ -623,6 +587,9 @@ public sealed partial class BlockEditor : UserControl
         _dragScroll.Stop();
         _dragSource = null;
         _ghost.IsVisible = false;
+        _ghost.Child = null;
+        _ghostPreview?.Dispose(); _ghostPreview = null; _dragRows = [];
+        MountOverlay(_ghost, restore: true);
         _dragging = false;
         SetHoveredBlock(null);
         DropTarget = null;

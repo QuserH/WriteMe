@@ -20,7 +20,7 @@ Status: implemented
 
 - `KnowledgeLibraryTests.cs` 覆盖 Unicode 边界、代码/网址排除、跨样式链接、单次撤销、改名/删除/重开、旧库补建、收藏时间独立，以及故意让索引写入失败后的整笔事务回滚。
 - `WorkspaceInteractionTests.cs` 通过原生指针/键盘验证链接补全、中文预编辑、旧文档草稿失效、标签筛选、收藏和隐藏反链定位。渲染图位于 `artifacts/native/qa-m3-m6/`，包含 `reference-completion.png` 和 `document-backlinks.png`。
-- `npm run native:test` 全套 180 项通过，`LayoutInteractionTests` 另检查缓存单元格/分栏接收新的链接目录。测试使用隔离 SQLite，不操作用户窗口与资料库。
+- `npm run native:test` 全套 208 项通过，`LayoutInteractionTests` 另检查缓存单元格/分栏接收新的链接目录。测试使用隔离 SQLite，不操作用户窗口与资料库。
 
 ## Alternatives considered
 

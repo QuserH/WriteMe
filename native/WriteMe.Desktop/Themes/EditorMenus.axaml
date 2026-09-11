@@ -1,0 +1,45 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Button.slashItem, Button.slashBack">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome1A1C1E}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.slashBack">
+    <Setter Property="Foreground" Value="{DynamicResource Chrome81858B}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.slashItem.selected /template/ ContentPresenter, Button.slashItem:pressed /template/ ContentPresenter, Button.slashBack:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF1F1F2}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.slashItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+  <Style Selector="Button.slashItem.selected:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF1F1F2}" />
+  </Style>
+  <Style Selector="Button.slashItem:disabled">
+    <Setter Property="Opacity" Value="0.38" />
+  </Style>
+  <Style Selector="Button.slashItem:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ContextMenu">
+    <Setter Property="Background" Value="{DynamicResource ChromeFAFAFA}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeEDEEEF}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="6" />
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource ChromeF1F1F2}" />
+  </Style>
+</Styles>
