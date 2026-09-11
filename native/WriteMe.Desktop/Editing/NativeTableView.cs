@@ -169,11 +169,15 @@ internal sealed partial class NativeTableView : NativeLayoutView
                 text.Inlines.Add(new Run(label) { Foreground = Owner.PageMuted });
                 continue;
             }
+            var offset = 0;
             foreach (var node in blocks[i].Content)
             {
+                var start = offset; offset += RichText.Length(node);
                 if (node.Type == "hardBreak") { text.Inlines.Add(new LineBreak()); continue; }
                 if (node.Type != "text") continue;
-                var run = new Run(node.Text.Replace('\u2028', '\n'));
+                foreach (var segment in Owner.SearchSegments(blocks[i].Id, node.Text, start))
+                {
+                var run = new Run(segment.Text.Replace('\u2028', '\n'));
                 if (node.Marks.Any(mark => mark.Type == "bold") || cell.Type == "tableHeader") run.FontWeight = FontWeight.SemiBold;
                 if (node.Marks.Any(mark => mark.Type == "italic")) run.FontStyle = FontStyle.Italic;
                 if (TextColor.Read(node.Marks) is { } color) run.Foreground = Brush.Parse(color);
@@ -184,14 +188,16 @@ internal sealed partial class NativeTableView : NativeLayoutView
                     run.TextDecorations = new TextDecorationCollection((run.TextDecorations ?? []).Append(comment));
                     run.Background ??= Owner.PageColor("#FFF6DC", "#473E2C");
                 }
+                if (segment.Background != null) run.Background = segment.Background;
                 text.Inlines.Add(run);
+                }
             }
         }
         text.FontWeight = cell.Type == "tableHeader" ? FontWeight.SemiBold : FontWeight.Normal;
         text.TextAlignment = blocks.FirstOrDefault()?.String("textAlign") switch { "center" => TextAlignment.Center, "right" => TextAlignment.Right, "justify" => TextAlignment.Justify, _ => TextAlignment.Left };
     }
 
-    internal void RefreshComments()
+    internal void RefreshDecorations()
     {
         if (Node == null) return;
         foreach (var cell in Node.Content.SelectMany(row => row.Content))

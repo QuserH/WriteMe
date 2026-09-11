@@ -81,8 +81,8 @@ public sealed partial class MainWindow
             if (_comments.ContextNode is not { } nodeId) return; // Keep an orphaned draft visible so it can be recovered.
             if (_editor.CommentBounds(nodeId, _commentsHost) is not { } rect)
             { if (!_comments.IsComposing) CloseComments(); return; }
-            var width = Math.Min(364, Math.Max(240, _commentsHost.Bounds.Width - 24));
-            var preferred = Math.Clamp(_comments.PreferredContextHeight(width), 160, 500);
+            var width = Math.Min(352, Math.Max(240, _commentsHost.Bounds.Width - 24));
+            var preferred = Math.Clamp(_comments.PreferredContextHeight(width), 104, 500);
             var belowSpace = _commentsHost.Bounds.Height - rect.Bottom - 20;
             var aboveSpace = rect.Top - 20;
             var below = belowSpace >= Math.Min(preferred, 260) || belowSpace >= aboveSpace;

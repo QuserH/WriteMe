@@ -41,6 +41,20 @@
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Padding" Value="15,9" />
     </Style>
+    <Style Selector="Button.commentSend /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome365E9D}" />
+      <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <Style Selector="Button.commentMore">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <Style Selector="Border.commentMessage:pointerover Button.commentMore">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.commentMore:focus-visible">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector="Button.documentCard">
       <Setter Property="Background" Value="{DynamicResource ChromeFFFFFF}" />
       <Setter Property="BorderBrush" Value="{DynamicResource ChromeECEEF0}" />

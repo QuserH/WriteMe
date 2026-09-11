@@ -31,10 +31,12 @@ internal static partial class Ui
         if (!_dark) return color;
         if (value == "#FAFAFA") return Color.Parse("#2A2E34");
         if (value == "#F1F1F2") return Color.Parse("#363B43");
+        if (value == "#F1F3F5") return Color.Parse("#262C33");
+        if (value == "#F4F5F7") return Color.Parse("#2D333B");
         if (value == "#EDEEEF") return Color.Parse("#424750");
         var maximum = Math.Max(color.R, Math.Max(color.G, color.B)); var minimum = Math.Min(color.R, Math.Min(color.G, color.B));
         if (value == "#FFFFFF") return Color.Parse("#252A31");
-        if (value is "#FBFCFD" or "#FCFDFE" or "#F4F5F7") return Color.Parse("#1B2027");
+        if (value is "#FBFCFD" or "#FCFDFE") return Color.Parse("#1B2027");
         if (maximum - minimum > 24) return Color.Parse(minimum > 165 ? "#30435F" : "#94B7EF");
         if (minimum > 220 && minimum < 245) return Color.Parse("#39414B");
         if (minimum >= 200) return Color.Parse("#303740");

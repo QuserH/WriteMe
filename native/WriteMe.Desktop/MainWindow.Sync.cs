@@ -95,7 +95,7 @@ public sealed partial class MainWindow
 
     private async Task<IReadOnlySet<string>> ApplyRemoteAsync(string target, SyncResponse response, CancellationToken cancellation)
     {
-        while (_switching || _editor.IsAnyComposing || _comments.IsComposing || _title.GetVisualDescendants().OfType<TextPresenter>().Any(presenter => !string.IsNullOrEmpty(presenter.PreeditText)))
+        while (_switching || _editor.IsAnyComposing || _comments.IsComposing || _outline.IsComposing || _title.GetVisualDescendants().OfType<TextPresenter>().Any(presenter => !string.IsNullOrEmpty(presenter.PreeditText)))
             await Task.Delay(60, cancellation);
         cancellation.ThrowIfCancellationRequested();
         var enabled = IsEnabled; _syncApplying = true; IsEnabled = false; UpdateEditorAvailability();

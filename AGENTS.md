@@ -24,7 +24,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 拖动落点、预览与光标 | 相邻块边界、可见子树只读预览、按文字度量的光标与预编辑 | Core 的 `BlockDropTargets.cs`，Desktop 的 `Editing/BlockDragPreview.cs` / `BlockCaretGeometry.cs` |
 | 选区格式 | 原生浮动工具栏、文字色/高亮、链接草稿、键盘导航 | `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` / `TextColorPicker.cs`，核心在 `native/WriteMe.Core/SelectionFormats.cs` / `TextColor.cs` |
 | 段落评论 | 段落气泡/浮层、逐条回复与回复的回复、删除占位、选区批注 | Core 的 `NoteComments.cs` / `CommentCommands.cs`，Desktop 的 `Editing/BlockEditor.ParagraphComments.cs` / `BlockEditor.Comments.cs` / `CommentsPane.cs` / `MainWindow.Comments.cs` |
-| 左侧导航 | 空间/当前文档模式、标题目录、隐藏标题定位 | `native/WriteMe.Desktop/Editing/DocumentOutlinePane.cs`，布局与模式在 `MainWindow.axaml` / `.cs`，目录模型在 `native/WriteMe.Core/DocumentTools.cs` |
+| 左侧导航与文内查找 | 空间/文档模式、目录、任务、附件/链接、查找替换与区域高亮 | Desktop 的 `Editing/DocumentOutlinePane.cs` / `.Navigation.cs` / `BlockEditor.Search.cs`，Core 的 `DocumentTools.cs` / `DocumentNavigation.cs`，窗口布局在 `MainWindow.axaml` / `.cs` |
 | 右侧工具 | 纸张外的插入/格式/样式/信息横向标签、收起胶囊、双侧栏响应布局 | `native/WriteMe.Desktop/Editing/EditorSidebar.cs` / `SidebarGlyph.cs`，扩展面板在 `MainWindow.Appearance.cs` |
 | 表格与分栏 | 区域编辑、共享历史、行列/宽度/比例、TSV、对齐 | Core 的 `LayoutBlocks.cs` / `ScopedSessions.cs`，Desktop 的 `Editing/BlockEditor.Layouts.cs` / `NativeTableView*.cs` / `NativeColumnsView.cs` |
 | 知识关联 | Unicode 标签、稳定 noteLink、反向链接、收藏 | `native/WriteMe.Core/NoteReferences.cs` / `KnowledgeStore.cs`，UI 在 `Editing/ReferenceCompletion.cs` / `MainWindow.Library.cs` |
@@ -35,7 +35,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 折叠排版 | 矢量三角、28px 标记列/缩进、长标题续行与选区坐标 | `native/WriteMe.Desktop/Editing/ToggleDisclosureButton.cs` / `BlockRendering.cs` / `BlockTextFormatter.cs` |
 | 文档核心 | 不可变文档树、TipTap JSON、可见投影、富文本、统一历史、结构移动 | `native/WriteMe.Core/` |
 | 本地存储 | Microsoft.Data.Sqlite，独立原生库及旧库在线备份导入 | `native/WriteMe.Core/NoteStore.cs` |
-| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 254 项，含真实 HTTP | `native/WriteMe.Tests/` |
+| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 265 项，含真实 HTTP | `native/WriteMe.Tests/` |
 | 发布 | 自带 .NET 运行时的 Windows 目录；最近成功版本清单 | `scripts/Publish-Native.ps1` / `Start-Native.ps1` → `artifacts/native/` |
 
 ### 保留的 Web / Tauri 基线
@@ -123,6 +123,8 @@ npm run init-board          # 生成决策看板 board.html
 - 待办/列表段首 Backspace 解除当前项包装并保留文字及子树；空项 Backspace/Delete/普通 Enter 回正文。复用 `ConvertBlock` 的拆分和编号规则，块菜单“删除此块”删除整项，均走统一历史。列表与待办预留 28px 标记列，复选框 24px 点击区不能和悬停手柄重叠；旧块菜单回调核对会话及文档树。
 - 原生新建折叠项显式 `collapsed: true`；空标题 Enter 也进入子项，父级展开、子级收起；Shift+Tab 退出层级。旧 JSON 状态不统一改写。箭头由 `BlockRow.IsExpanded` 决定，祖先线由 `GuideDepths` 单处绘制；不要退回按普通 Depth 为所有缩进画线。
 - 左侧目录只收录 `heading`，普通折叠标题不入目录；收起祖先内部真正的标题仍可定位，层次按标题等级组织。点击或 Enter 才跳转，打开/聚焦目录不自动展开折叠。底部切换空间/文档模式，`Ctrl+Alt+3` 打开左侧目录；右侧提供插入/Aa/页面/信息，`Ctrl+Alt+1/2` 打开插入/格式，全文展开/收起放文档菜单。中央卡片是资料库总览，不能混同于正文嵌套页面块。
+- 当前文档左栏提供目录/任务/附件与链接/查找四个标签。`DocumentNavigation` 按不可变根弱缓存完整支持树，含收起子树、表格和分栏；任务勾选不展开祖先，点击/Enter 才定位，资源打开复用资产处理器。`Ctrl+F` 文内查找、`Ctrl+H` 文内替换、`Ctrl+Shift+F` 全库搜索；资料库总览的 Ctrl+F 仍搜索全库。查询为字面匹配，最多 2,048 UTF-16 单位/20,000 处，截断时禁用全部替换。
+- `ReplaceSearch` 核对根快照与区域挂接，一次根事务保留结构、段落评论及适用格式；被替换的文字批注遵守原有插入规则。单处替换与必要祖先展开同一次历史，全部替换保留折叠状态，同文替换无操作。搜索高亮只在运行期，正文/区域/表格摘要共用根结果；切文档清空查询与替换。列表必须可聚焦，表格导航后的查询焦点按会话、Revision 和标签延后恢复；预编辑保护键盘、指针切标签和同步应用。详见 [编辑导航](.agents/notes/implemented/feature/2026-09-09-editor-sidebar.md)。
 - 右侧插入使用 `InsertBlock`，不替换文字选区；样式使用 `ConvertBlock`，相同样式不清除任务勾选。有序列表拆分保留后续编号；面板、导航与历史规则见 [编辑导航](.agents/notes/implemented/feature/2026-09-09-editor-sidebar.md)。
 - 标签/双链索引和 FTS5 搜索从完整文档树派生，包含表格和分栏；两个索引版本均为 2。保存正文与重建本篇索引同事务，来源使用块路径/局部偏移，不持久化运行期节点 GUID。`noteLink.documentId` 稳定绑定目标，改名保留别名，回收站来源不计为有效反链。见 [M3 关联](.agents/notes/implemented/feature/2026-09-09-m3-note-connections.md)。
 - 空间/文件夹/位置独立于标题，容器删除保留正文；最近按打开时间排序。中文 ≥3 字符走 FTS5 trigram，短词回退参数化子串；同一当前文档的搜索结果也必须定位。卡片每批 40 张，查询尚未分页；见 [资料库与搜索](.agents/notes/implemented/feature/2026-09-10-library-and-search.md)。

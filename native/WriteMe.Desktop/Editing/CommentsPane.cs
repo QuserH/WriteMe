@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -31,12 +32,14 @@ public sealed class CommentsPane : Border
     private readonly Dictionary<(string Document, string Key), Draft> _drafts = [];
     private readonly Dictionary<string, string> _lastDraft = [];
     private readonly Dictionary<Guid, int> _replyLimits = [];
-    private readonly StackPanel _list = new() { Spacing = 10, Margin = new(12, 6, 12, 18) };
+    private readonly StackPanel _list = new() { Spacing = 0, Margin = new(0, 0, 0, 4) };
     private readonly ScrollViewer _scroll;
     private readonly TextBlock _count = new() { FontSize = 11, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _heading = new() { Text = "评论", FontSize = 15, FontWeight = FontWeight.SemiBold };
+    private readonly TextBlock _heading = new() { Text = "评论", FontSize = 13, FontWeight = FontWeight.Medium };
     private readonly StackPanel _composer;
     private readonly Grid _header;
+    private readonly Grid _targetRow;
+    private readonly Grid _footer;
     private readonly Button _all;
     private readonly Button _new;
     private readonly TextBox _input = new() { Watermark = "输入你的评论…", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 66, MaxHeight = 150, FontSize = 13, Padding = new(0), BorderThickness = new(0), Background = Brushes.Transparent };
@@ -100,7 +103,6 @@ public sealed class CommentsPane : Border
         var header = new Grid { ColumnDefinitions = new("Auto,*,Auto,Auto,Auto"), Margin = new(18, 15, 12, 10) };
         _header = header;
         var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9, VerticalAlignment = VerticalAlignment.Center };
-        label.Children.Add(new SidebarGlyph(SidebarSymbol.Comment, 18));
         label.Children.Add(_heading);
         header.Children.Add(label); Grid.SetColumn(_count, 1); _count.Margin = new(9, 0, 0, 0); header.Children.Add(_count);
         var close = Button(new SidebarGlyph(SidebarSymbol.Close, 15), "关闭评论", "CommentsClose", () => { if (!IsComposing) CloseRequested?.Invoke(this, EventArgs.Empty); });
@@ -108,13 +110,14 @@ public sealed class CommentsPane : Border
         _all = Button("全文", "查看整篇文档的评论", "CommentsOverview", () => { if (!IsComposing) OverviewRequested?.Invoke(this, EventArgs.Empty); });
         _new.IsVisible = false; _all.IsVisible = false;
         Grid.SetColumn(_new, 2); header.Children.Add(_new); Grid.SetColumn(_all, 3); header.Children.Add(_all);
-        Grid.SetColumn(close, 4); header.Children.Add(close); layout.Children.Add(header);
+        Grid.SetColumn(close, 4); header.Children.Add(close);
+        layout.Children.Add(new Border { Child = header, Background = Ui.Shell, CornerRadius = new(17, 17, 0, 0), BorderBrush = Ui.Line, BorderThickness = new(0, 0, 0, 1) });
         _scroll = new ScrollViewer { Content = _list, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(_scroll, 1); layout.Children.Add(_scroll);
 
         var composer = new StackPanel { Spacing = 9, Margin = new(14, 12) };
         _composer = composer;
-        var targetRow = new Grid { ColumnDefinitions = new("*,Auto") }; targetRow.Children.Add(_target);
+        var targetRow = new Grid { ColumnDefinitions = new("*,Auto") }; targetRow.Children.Add(_target); _targetRow = targetRow;
         _cancel = Button(new SidebarGlyph(SidebarSymbol.Close, 12), "保留草稿，返回新评论", "CommentCancelMode", () => { if (!IsComposing) ChooseDraft(NewDraftKey); });
         Grid.SetColumn(_cancel, 1); targetRow.Children.Add(_cancel); composer.Children.Add(targetRow);
         _input.Classes.Add("clean"); AutomationProperties.SetAutomationId(_input, "CommentInput"); AutomationProperties.SetName(_input, "评论草稿");
@@ -135,10 +138,10 @@ public sealed class CommentsPane : Border
             _session.Undo(); _undoRevision = null; SetStatus("评论已恢复"); Refresh(true);
         });
         _undo.HorizontalAlignment = HorizontalAlignment.Left; _undo.IsVisible = false; statusRow.Children.Add(_undo); composer.Children.Add(statusRow);
-        var footer = new Grid { ColumnDefinitions = new("*,Auto") };
+        var footer = new Grid { ColumnDefinitions = new("*,Auto") }; _footer = footer;
         footer.Children.Add(new TextBlock { Text = "Ctrl+Enter 发送 · Enter 换行", FontSize = 10, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center });
-        _send = Button("发送", "发送评论 · Ctrl+Enter", "CommentSend", Submit); _send.Classes.Add("primary"); Grid.SetColumn(_send, 1); footer.Children.Add(_send); composer.Children.Add(footer);
-        var frame = new Border { Child = composer, BorderBrush = Ui.Line, BorderThickness = new(0, 1, 0, 0) };
+        _send = Button("发送", "发送评论 · Ctrl+Enter", "CommentSend", Submit); _send.Classes.Add("commentSend"); Grid.SetColumn(_send, 1); footer.Children.Add(_send); composer.Children.Add(footer);
+        var frame = new Border { Child = composer, BorderBrush = Ui.Line, BorderThickness = new(0, 1, 0, 0), Background = Ui.Chrome("#FAFAFA"), CornerRadius = new(0, 0, 17, 17) };
         Grid.SetRow(frame, 2); layout.Children.Add(frame); Child = layout;
         AddHandler(KeyDownEvent, (_, e) =>
         {
@@ -187,8 +190,8 @@ public sealed class CommentsPane : Border
         var index = NoteComments.For(_session.Root);
         var scoped = IsContextual ? ContextNode is { } node ? index.InBlock(node) : [] : index.Threads;
         ContextThreadCount = scoped.Length;
-        _heading.Text = IsContextual ? "段落评论" : "评论";
-        _input.MinHeight = IsContextual ? 32 : 66; _input.MaxHeight = IsContextual ? 100 : 150;
+        _heading.Text = "评论";
+        _input.MinHeight = IsContextual ? 24 : 66; _input.MaxHeight = IsContextual ? 100 : 150;
         _composer.Spacing = IsContextual ? 7 : 9; _composer.Margin = IsContextual ? new(14, 10) : new(14, 12);
         _header.Margin = IsContextual ? new(16, 9, 10, 7) : new(18, 15, 12, 10);
         _all.IsVisible = IsContextual; _new.IsVisible = IsContextual && scoped.Length > 0;
@@ -224,9 +227,9 @@ public sealed class CommentsPane : Border
     private Control Card(CommentThread thread, NoteComments index)
     {
         var session = _session; var expanded = IsContextual || _selected == thread.Id;
-        var body = new StackPanel { Spacing = 10 };
-        var card = new Border { Child = body, Padding = new(13), CornerRadius = new(12), BorderThickness = new(1),
-            BorderBrush = expanded ? Ui.Chrome("#C8D6E9") : Ui.Line, Background = expanded ? Ui.Chrome("#FBFCFD") : Ui.Surface };
+        var body = new StackPanel { Spacing = 12 };
+        var card = new Border { Child = body, Padding = new(16, 14, 14, 16), BorderThickness = new(0, 0, 0, 1),
+            BorderBrush = Ui.Line, Background = Brushes.Transparent };
         AutomationProperties.SetAutomationId(card, "CommentThread_" + thread.Id);
         if (thread.Anchored)
         {
@@ -242,6 +245,7 @@ public sealed class CommentsPane : Border
                 });
             quote.HorizontalAlignment = HorizontalAlignment.Stretch; quote.HorizontalContentAlignment = HorizontalAlignment.Left;
             quote.Padding = new(9, 6); quote.Background = Ui.Chrome("#F4F5F7");
+            quote.IsVisible = !IsContextual || !thread.WholeBlock || missing;
             body.Children.Add(quote);
             if (missing) body.Children.Add(new TextBlock { Text = "原文已删除", FontSize = 10, Foreground = Ui.Muted });
         }
@@ -249,29 +253,32 @@ public sealed class CommentsPane : Border
         var replyLimit = _replyLimits.GetValueOrDefault(thread.Id, 20);
         var recent = thread.Messages.Skip(Math.Max(1, thread.Messages.Length - replyLimit)).Select(message => message.Id).ToHashSet();
         var messages = expanded ? thread.Messages.Where(message => message.Id == thread.Messages[0].Id || recent.Contains(message.Id) || message.Id == _highlightedMessage) : [thread.Messages[0]];
-        var repliesBody = new StackPanel { Spacing = 14 };
-        var replyFrame = new Border { Child = repliesBody, Padding = new(10, 11), CornerRadius = new(9), Background = Ui.Chrome("#F4F5F7") };
+        var repliesBody = new StackPanel { Spacing = 16 };
+        var replyFrame = new Border { Child = repliesBody, Padding = new(14, 2, 0, 0), Margin = new(13, 0, 0, 0), BorderBrush = Ui.Line, BorderThickness = new(1, 0, 0, 0) };
         var byId = thread.Messages.ToDictionary(message => message.Id);
         foreach (var message in messages)
         {
             var isReply = message.Id != thread.Messages[0].Id;
             var parent = isReply ? byId.GetValueOrDefault(message.ReplyTo ?? thread.Messages[0].Id) : null;
-            var messageBody = new StackPanel { Spacing = 6 };
-            var messageFrame = new Border { Child = messageBody, Margin = new(isReply && parent?.Id != thread.Messages[0].Id ? 10 : 0, 0, 0, 0),
-                CornerRadius = new(5), Background = _highlightedMessage == message.Id ? Ui.Chrome("#E8EEF7") : Brushes.Transparent };
+            var messageBody = new StackPanel { Spacing = 4 };
+            var messageLayout = new Grid { ColumnDefinitions = new("34,*") };
+            Grid.SetColumn(messageBody, 1); messageLayout.Children.Add(messageBody);
+            var messageFrame = new Border { Child = messageLayout, CornerRadius = new(6),
+                Background = _highlightedMessage == message.Id ? Ui.Chrome("#EFF3F8") : Brushes.Transparent, Classes = { "commentMessage" } };
             AutomationProperties.SetAutomationId(messageFrame, "CommentMessage_" + message.Id);
             if (message.Deleted)
             {
                 messageBody.Children.Add(new TextBlock { Text = "这条回复已删除", FontSize = 11, Foreground = Ui.Muted, Margin = new(0, 4) });
                 repliesBody.Children.Add(messageFrame); continue;
             }
-            var head = new Grid { ColumnDefinitions = new("Auto,*,Auto") };
-            var avatar = new Border { Width = 24, Height = 24, CornerRadius = new(12), Background = Ui.Chrome("#E8EEF7"), Child = new TextBlock { Text = "我", FontSize = 10, Foreground = Ui.Chrome("#5477A5"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-            head.Children.Add(avatar);
-            var byline = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Margin = new(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var head = new Grid { ColumnDefinitions = new("*,Auto") };
+            var avatar = new Border { Width = 26, Height = 26, CornerRadius = new(13), Background = Ui.Chrome("#E6F0E8"), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left,
+                Child = new TextBlock { Text = StringInfo.GetNextTextElement(message.Author), FontSize = 10, Foreground = Ui.Chrome("#52785B"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+            messageLayout.Children.Add(avatar);
+            var byline = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
             byline.Children.Add(new TextBlock { Text = message.Author, FontSize = 12, FontWeight = FontWeight.Medium });
-            byline.Children.Add(new TextBlock { Text = DateTimeOffset.FromUnixTimeMilliseconds(message.CreatedAt).LocalDateTime.ToString("M/d HH:mm") + (message.EditedAt != null ? " · 已编辑" : ""), FontSize = 9, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center });
-            Grid.SetColumn(byline, 1); head.Children.Add(byline);
+            byline.Children.Add(new TextBlock { Text = DateTimeOffset.FromUnixTimeMilliseconds(message.CreatedAt).LocalDateTime.ToString("M/d HH:mm") + (message.EditedAt != null ? " · 已编辑" : ""), FontSize = 10, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(byline);
             Button? menuButton = null;
             menuButton = Button(new SidebarGlyph(SidebarSymbol.More, 14), "评论操作", "CommentMenu_" + message.Id, () =>
             {
@@ -282,7 +289,8 @@ public sealed class CommentsPane : Border
                 menuButton!.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete } };
                 menuButton.ContextMenu.Open(menuButton);
             });
-            Grid.SetColumn(menuButton, 2); head.Children.Add(menuButton); messageBody.Children.Add(head);
+            menuButton.MinHeight = 22; menuButton.Padding = new(5, 3); menuButton.Classes.Add("commentMore");
+            Grid.SetColumn(menuButton, 1); head.Children.Add(menuButton); messageBody.Children.Add(head);
             if (parent != null)
             {
                 var target = Button(new TextBlock { Text = $"回复 {parent.Author} · {(parent.Deleted ? "这条回复已删除" : NoteComments.Abbreviate(parent.Text.Replace('\n', ' '), 60))}",
@@ -291,7 +299,7 @@ public sealed class CommentsPane : Border
                 target.Padding = new(0); target.MinHeight = 16; target.HorizontalContentAlignment = HorizontalAlignment.Left;
                 messageBody.Children.Add(target);
             }
-            messageBody.Children.Add(new SelectableTextBlock { Text = expanded ? message.Text : NoteComments.Abbreviate(message.Text, 240), FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap });
+            messageBody.Children.Add(new SelectableTextBlock { Text = expanded ? message.Text : NoteComments.Abbreviate(message.Text, 240), FontSize = 13, LineHeight = 20, TextWrapping = TextWrapping.Wrap });
             var reply = Button("回复", "回复这条消息", isReply ? "CommentReplyMessage_" + message.Id : "CommentReply_" + thread.Id,
                 () => { if (Current(session)) BeginReply(thread, message); });
             reply.HorizontalAlignment = HorizontalAlignment.Left; reply.Padding = new(0, 2); reply.MinHeight = 20; reply.Foreground = Ui.Chrome("#5477A5");
@@ -432,6 +440,8 @@ public sealed class CommentsPane : Border
         if (_draft.Message == null && _draft.Thread is { } replying && _session != null
             && NoteComments.For(_session.Root).Find(replying.Id)?.Messages.FirstOrDefault(message => message.Id == (_draft.ReplyTo ?? replying.Messages[0].Id)) is not { Deleted: false })
         { _send.IsEnabled = false; _target.Text = "要回复的消息已删除 · 草稿已保留"; }
+        _targetRow.IsVisible = !IsContextual || _draft.Thread != null || !_anchorValid;
+        _footer.IsVisible = !IsContextual || _draft.Text.Length > 0 || _draft.Message != null;
     }
 
     private void Submit()

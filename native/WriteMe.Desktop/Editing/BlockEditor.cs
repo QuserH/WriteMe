@@ -105,6 +105,7 @@ public sealed partial class BlockEditor : UserControl
         AutomationProperties.SetName(Surface, "笔记正文");
         AutomationProperties.SetName(Surface.TextArea, "笔记正文");
         Surface.Background = Brushes.Transparent;
+        Surface.Classes.Add("noteSurface");
         Surface.Foreground = Ui.Ink;
         Surface.FontFamily = new("Microsoft YaHei UI, Segoe UI, Noto Sans CJK SC, sans-serif");
         Surface.FontSize = 15;

@@ -11,7 +11,7 @@ Status: implemented
 - `LibraryStore.cs` 用独立表保存空间、层级文件夹、文档位置、最近打开时间、回收站状态与每日身份。旧文档归入默认“我的空间”；默认空间不能删除。
 - 文件夹移动拒绝循环及跨空间父级，文档移动校验文件夹归属。删除文件夹将内容移回上一级，删除空间移回默认空间，均保留正文。新建文档继承当前空间和文件夹。
 - SQLite FTS5 trigram 索引完整文档树的标题和文字，包含收起子树、表格单元格和分栏；小于三个 Unicode 字符的查询使用参数化子串匹配。索引版本为 2，升级在事务内重建，正文与派生索引同事务保存；查询结果携带块路径、局部偏移及上下文。内部命中通过 `BlockEditor.NavigateTo` 进入对应原生区域。
-- `MainWindow.Library.cs` 在左侧空间模式提供全部、最近、收藏、标签、文件夹、空间管理和回收站。点击或 Enter 打开搜索结果时展开必要祖先并定位，即使目标已经是当前文档也执行定位。`Ctrl+F` 聚焦全文搜索；收藏与反链遵循 [M3 笔记关联](2026-09-09-m3-note-connections.md)。
+- `MainWindow.Library.cs` 在左侧空间模式提供全部、最近、收藏、标签、文件夹、空间管理和回收站。点击或 Enter 打开搜索结果时展开必要祖先并定位，即使目标已经是当前文档也执行定位。`Ctrl+Shift+F` 聚焦全库搜索，资料库总览中的 `Ctrl+F` 也保留该行为；编辑文档时 `Ctrl+F` / `Ctrl+H` 分别打开文内查找/替换，使用未保存的文档树，详见 [编辑导航](2026-09-09-editor-sidebar.md)。收藏与反链遵循 [M3 笔记关联](2026-09-09-m3-note-connections.md)。
 - `MainWindow.Overview.cs` 为资料库筛选显示响应式卡片或单列列表，复用查询、保存和打开路径，支持标题/时间排序。卡片包含真实封面、标题、摘要、更新时间及收藏状态，可新建、打开、移动、复制和回收；每次先渲染 40 张，点击“显示更多文档”再追加。封面和摘要共同受卡片高度约束，底部日期/收藏不被裁切。回到当前文档模式保留现有编辑会话与历史。
 - 左栏底部提供可发现的回收站按钮，笔记列表右键可复制或移入回收站。删除后出现“撤销删除”，恢复最近一次删除的原文档身份并重新打开；正文撤销栈不承担资料库删除。永久删除是独立的明确确认入口，删除目标不会清除其他笔记中的链接文字。空间、文件夹、位置及回收站状态进入 [同步模型](../architecture/2026-09-08-sync-docker-crdt.md)，最近打开时间与全文索引留在本机。
 
@@ -19,7 +19,7 @@ Status: implemented
 
 - `KnowledgeLibraryTests.cs` 覆盖旧库归位、循环/跨空间拒绝、容器删除保留正文、中文一字/两字/长词、英文和引号、隐藏正文定位、组合过滤，以及最近打开不受自动保存排序影响。
 - `WorkspaceInteractionTests.cs` 验证原生空间筛选、搜索、同一文档结果定位、卡片打开/收藏、新建、返回编辑与历史保留。`library-overview.png`、`library-search.png` 已在隔离资料库渲染检查。
-- `LayoutWorkspaceTests.cs` 另覆盖卡片/列表切换、排序、嵌套正文命中与编辑保存、删除后直接撤销恢复；当前 `npm run native:test` 全套 180 项通过，渲染图见 `artifacts/native/qa-craft-layout/`。
+- `LayoutWorkspaceTests.cs` 另覆盖卡片/列表切换、排序、嵌套正文命中与编辑保存、删除后直接撤销恢复；`DocumentNavigationInteractionTests.cs` 验证文内与全库快捷键分工。当前 `npm run native:test` 全套 265 项通过，最新渲染图见 `artifacts/native/qa-navigation/`。
 
 ## Alternatives considered
 

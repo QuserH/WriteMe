@@ -69,6 +69,7 @@ public sealed partial class MainWindow : Window
         _editor = new(new(NoteJson.Parse(_active.Content)));
         this.FindControl<Grid>("EditorHost")!.Children.Add(_editor);
         _outline = new(_editor);
+        _outline.PanelChanged += (_, _) => _relations.IsVisible = _outline.ActivePanel == DocumentPanel.Outline;
         _documentPane.Children.Add(_outline);
         Grid.SetRow(_relations, 1); _documentPane.Children.Add(_relations);
         this.FindControl<Grid>("LeftPaneHost")!.Children.Add(_documentPane);
@@ -138,7 +139,7 @@ public sealed partial class MainWindow : Window
             }
             if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key is Key.D1 or Key.D2 or Key.D3)
             {
-                if (_editor.IsAnyComposing || _comments.IsComposing) { e.Handled = true; return; }
+                if (_editor.IsAnyComposing || _comments.IsComposing || _outline.IsComposing) { e.Handled = true; return; }
                 if (e.Key == Key.D3) { ShowNavigation(true); _outline.FocusOutline(); }
                 else
                 {
@@ -150,7 +151,14 @@ public sealed partial class MainWindow : Window
             }
             if (e.Key == Key.S) { e.Handled = true; await SaveAsync(); }
             if (e.Key == Key.N) { e.Handled = true; await NewAsync(); }
-            if (e.Key == Key.F) { e.Handled = true; ShowNavigation(false); _search.Focus(); _search.SelectAll(); }
+            if (e.Key is Key.F or Key.H)
+            {
+                e.Handled = true;
+                if (_editor.IsAnyComposing || _comments.IsComposing || _outline.IsComposing) return;
+                if (e.Key == Key.F && (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || _overviewVisible))
+                { ShowNavigation(false); _search.Focus(); _search.SelectAll(); }
+                else { ShowNavigation(true); _outline.FocusFind(e.Key == Key.H); }
+            }
             if (e.Key == Key.O) { e.Handled = true; await RunUiAsync(ImportAsync); }
             if (e.Key == Key.OemComma) { e.Handled = true; await SettingsAsync(); }
         }, RoutingStrategies.Tunnel);
@@ -189,6 +197,7 @@ public sealed partial class MainWindow : Window
         this.FindControl<Border>("LibrarySidebar")!.IsVisible = showLibrary;
         this.FindControl<Grid>("SpacePane")!.IsVisible = !_documentNavigation;
         _documentPane.IsVisible = _documentNavigation;
+        _outline.RefreshVisibility();
         this.FindControl<Button>("SpaceModeButton")!.Classes.Set("active", !_documentNavigation);
         this.FindControl<Button>("DocumentModeButton")!.Classes.Set("active", _documentNavigation);
         _tools.Margin = new(0, _tools.IsOpen ? 4 : 36, 16, 14);

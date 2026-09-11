@@ -13,10 +13,10 @@ using WriteMe.Core;
 namespace WriteMe.Desktop.Editing;
 
 // Note: Craft 的目录属于左侧当前文档导航，只收录标题 — 见 .agents/notes/implemented/feature/2026-09-09-editor-sidebar.md
-public sealed class DocumentOutlinePane : UserControl
+public sealed partial class DocumentOutlinePane : UserControl
 {
     private readonly BlockEditor _owner;
-    private readonly TextBlock _title = new() { FontSize = 14, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly TextBlock _title = new() { FontSize = 13, FontWeight = FontWeight.Medium, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _updated = new() { FontSize = 11, Foreground = Ui.Chrome("#A1A5AC"), Margin = new(0, 3, 0, 0) };
     private readonly ListBox _list = new() { BorderThickness = new(0), Background = Brushes.Transparent, Padding = new(0), Margin = new(10, 0, 12, 0), Focusable = true };
     private readonly TextBlock _empty = new() { Text = "使用标题创建目录。", FontSize = 12, Foreground = Ui.Chrome("#93989F"), Margin = new(18, 9, 16, 0), TextWrapping = TextWrapping.Wrap };
@@ -29,8 +29,8 @@ public sealed class DocumentOutlinePane : UserControl
     {
         _owner = owner;
         AutomationProperties.SetName(this, "当前文档目录");
-        var layout = new Grid { RowDefinitions = new("Auto,Auto,*") };
-        var header = new Grid { ColumnDefinitions = new("42,*"), Margin = new(17, 16, 17, 30) };
+        var layout = new Grid { RowDefinitions = new("Auto,Auto,Auto,*") };
+        var header = new Grid { ColumnDefinitions = new("38,*"), Margin = new(17, 10, 17, 16) };
         header.Children.Add(new Border
         {
             Width = 29, Height = 36, Background = Ui.Surface, BorderBrush = Ui.Chrome("#E7E9ED"),
@@ -43,9 +43,8 @@ public sealed class DocumentOutlinePane : UserControl
         Grid.SetColumn(labels, 1);
         header.Children.Add(labels);
         layout.Children.Add(header);
-        var caption = new TextBlock { Text = "目录", FontSize = 11, Foreground = Ui.Chrome("#92979F"), Margin = new(18, 0, 16, 10) };
-        Grid.SetRow(caption, 1);
-        layout.Children.Add(caption);
+        var tabs = BuildNavigationTabs(); Grid.SetRow(tabs, 1); layout.Children.Add(tabs);
+        Grid.SetRow(_sectionHeader, 2); layout.Children.Add(_sectionHeader);
         _list.Classes.Add("documentOutline");
         AutomationProperties.SetName(_list, "文档目录");
         AutomationProperties.SetAutomationId(_list, "DocumentOutline");
@@ -64,8 +63,9 @@ public sealed class DocumentOutlinePane : UserControl
         var body = new Grid();
         body.Children.Add(_list);
         body.Children.Add(_empty);
-        Grid.SetRow(body, 2);
-        layout.Children.Add(body);
+        InitializeNavigation(body);
+        Grid.SetRow(_navigationPanels, 3);
+        layout.Children.Add(_navigationPanels);
         Content = layout;
         _list.AddHandler(PointerReleasedEvent, (_, e) =>
         {
@@ -75,7 +75,7 @@ public sealed class DocumentOutlinePane : UserControl
         _list.KeyDown += (_, e) => { if (e.Key == Key.Enter) { NavigateSelected(); e.Handled = true; } };
         AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (e.Key == Key.Escape) { _owner.FocusText(); e.Handled = true; }
+            if (e.Key == Key.Escape) { if (!IsComposing) _owner.FocusText(); e.Handled = true; }
         }, RoutingStrategies.Bubble);
         owner.SelectionChanged += (_, _) => QueueRefresh();
         owner.InputClient.PreeditChanged += (_, _) => QueueRefresh();
@@ -94,6 +94,7 @@ public sealed class DocumentOutlinePane : UserControl
 
     public void FocusOutline()
     {
+        ShowPanel(DocumentPanel.Outline);
         Refresh();
         if (_list.SelectedIndex < 0 && _entries.Length > 0) _list.SelectedIndex = 0;
         var session = _owner.Session;
@@ -106,7 +107,7 @@ public sealed class DocumentOutlinePane : UserControl
         _owner.NavigateTo(entry.NodeId);
     }
 
-    private bool CanNavigate() => _owner.IsEnabled && !_owner.IsAnyComposing
+    private bool CanNavigate() => _owner.IsEffectivelyEnabled && IsEffectivelyEnabled && !_owner.IsAnyComposing && !IsComposing
         && ReferenceEquals(_session, _owner.Session) && ReferenceEquals(_root, _owner.Session.Root)
         && _owner.Surface.Document.TextLength == _owner.Session.Projection.Text.Length;
 
@@ -121,16 +122,20 @@ public sealed class DocumentOutlinePane : UserControl
     {
         if (!IsVisible) return;
         var session = _owner.Session;
-        if (!ReferenceEquals(_root, session.Root) || !ReferenceEquals(_session, session))
+        var changed = !ReferenceEquals(_root, session.Root) || !ReferenceEquals(_session, session);
+        if (changed)
         {
+            var switched = !ReferenceEquals(_session, session);
             _root = session.Root;
             _session = session;
             _entries = DocumentOutline.Read(session.Root).ToArray();
             _list.ItemsSource = _entries;
+            if (switched) ResetNavigationDocument();
         }
         _empty.IsVisible = _entries.Length == 0;
         _list.IsEnabled = CanNavigate();
         if (!_list.IsKeyboardFocusWithin)
             _list.SelectedItem = _entries.FirstOrDefault(entry => entry.NodeId == session.Selection.Caret.NodeId);
+        RefreshNavigation(changed);
     }
 }

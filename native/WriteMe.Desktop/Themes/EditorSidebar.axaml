@@ -147,6 +147,43 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
+  <Style Selector="Button.documentTab">
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome747A84}" />
+  </Style>
+  <Style Selector="Border.documentSearchField">
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeECEEF0}" />
+  </Style>
+  <Style Selector="Border.documentSearchField:focus-within">
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome7D9FD7}" />
+  </Style>
+  <Style Selector=".noteSurface ScrollBar">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector=".noteSurface:pointerover ScrollBar">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <Style Selector=".noteSurface ScrollBar:pointerover">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector=".noteSurface ScrollBar:focus-within">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.documentTab.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeFFFFFF}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome41464C}" />
+    <Setter Property="BoxShadow" Value="0 1 3 0 #1A000000" />
+  </Style>
+  <Style Selector="Button.documentTab:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome7D9FD7}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.findAction /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChromeF4F5F7}" />
+  </Style>
+  <Style Selector="Button.findAction:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
   <Style Selector="Button.navigationMode:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource ChromeF0F3F7}" />
   </Style>

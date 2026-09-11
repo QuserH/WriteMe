@@ -44,7 +44,7 @@ public sealed partial class BlockEditor
     {
         Surface.TextArea.TextView.Redraw(); QueueCommentMarkers();
         foreach (var child in this.GetVisualDescendants().OfType<BlockEditor>()) { child.Surface.TextArea.TextView.Redraw(); child.QueueCommentMarkers(); }
-        foreach (var table in this.GetVisualDescendants().OfType<NativeTableView>()) table.RefreshComments();
+        foreach (var table in this.GetVisualDescendants().OfType<NativeTableView>()) table.RefreshDecorations();
     }
 
     internal TextDecoration? CommentDecoration(System.Collections.Immutable.ImmutableArray<NoteMark> marks)

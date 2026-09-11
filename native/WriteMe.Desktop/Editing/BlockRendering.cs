@@ -96,6 +96,12 @@ internal sealed class BlockStyleTransformer(BlockEditor owner) : DocumentColoriz
                 });
             offset += RichText.Length(run);
         }
+        foreach (var match in owner.SearchMatches(row.Node.Id))
+        {
+            var start = Math.Max(row.Start + match.Start, line.Offset);
+            var end = Math.Min(row.Start + match.Start + match.Length, line.EndOffset);
+            if (end > start) ChangeLinePart(start, end, element => element.TextRunProperties.SetBackgroundBrush(owner.SearchColor(match)));
+        }
     }
 }
 
