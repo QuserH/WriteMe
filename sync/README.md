@@ -155,7 +155,9 @@ curl http://127.0.0.1:8787/health
 
 完整原生回归共 299 项，包含 M6 真实 HTTP、共享 WebSocket、账号权限、消息作者校验、临时会话撤销、两原生窗口和 Chromium/原生联动。运行前先 `npm run build` 及 `npx playwright install chromium`。`npm run test:shared` 另验证 `/admin`、两个浏览器账号、评论、表格、离线恢复和只读展开，使用临时数据目录。
 
-Linux ARM64、Docker 29.7.1 / Compose 5.3.1 已完成新镜像的非 root 运行、双账号网页协作和重启持久化验证；生产服务保留旧资料卷并开放局域网 18789。升级前通过停止本项目容器复制完整资料卷，保留服务器和本机两份备份。旧 M6 的两 Windows C# 客户端、附件、冲突与空库恢复结果继续保留。构建使用 `compose.host-build.yaml`；其他服务不重启。验证产物在被忽略的 `artifacts/shared-qa/` 和 `artifacts/native/qa-remote-sync/`。
+Linux ARM64、Docker 29.7.1 / Compose 5.3.1 已完成新镜像的非 root 运行、双账号网页协作、安卓浏览器模拟与重启持久化验证；生产服务保留旧资料卷并开放局域网 18789。手机与账号版本的当前运行目录为 `/home/quser/writeme-mobile-accounts-9093b78`，Compose 项目仍为 `writeme-sync`。升级前停止本项目容器复制完整资料卷，保留服务器和本机两份备份并核对 SHA-256；账号身份/密码字段、个人同步状态、共享正文和评论数据在升级前后保持一致。
+
+3 组共享网页端到端测试在隔离容器验证评论、头像、六位密码、管理员改名和设备管理，重启后再次读取头像和账号数据。生产只验证入口、资源和数据一致性，不修改用户现行账号。旧 M6 的两 Windows C# 客户端、附件、冲突与空库恢复结果继续保留。构建使用 `compose.host-build.yaml` 的主机网络设置；Docker Hub 不可达时通过 `NODE_IMAGE` 参数使用已有的 `public.ecr.aws/docker/library/node:24-bookworm-slim`。其他服务不重启，验证产物在被忽略的 `artifacts/shared-qa/` 和 `artifacts/native/qa-remote-sync/`。
 
 公网 HTTPS 代理与证书部署未包含在这次隧道验收中。
 
