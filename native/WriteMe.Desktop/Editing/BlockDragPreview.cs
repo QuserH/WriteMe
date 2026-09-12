@@ -42,14 +42,14 @@ internal sealed class BlockDragPreview : Decorator, IDisposable
         var block = source.Block.Type is "listItem" or "taskItem"
             ? new NoteNode(source.IsTask ? "taskList" : source.Marker == "•" ? "bulletList" : "orderedList") { Content = [source.Block] }
             : source.Block;
-        _preview = new(new(new("doc") { Content = [block] }), owner.IsCompact, preview: true)
+        _preview = new(new(new("doc") { Content = [block], Attrs = owner.Session.HistoryOwner.Root.Attrs }), owner.IsCompact, preview: true)
         {
             PreviewInset = BlockLayout.TextInset - 6,
             PreviewDepth = source.Depth, PreviewQuote = source.Quote, IsTableCell = owner.IsTableCell,
             Width = Width, Height = Math.Min(height, maximumPaintHeight),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
             PageBackgroundColor = owner.PageBackgroundColor, DividerStyle = owner.DividerStyle,
-            ResolveAsset = owner.ResolveAsset
+            ResolveAsset = owner.ResolveAsset, CommentAvatarFactory = owner.ResolvedCommentAvatarFactory
         };
         _preview.Surface.FontFamily = owner.Surface.FontFamily;
         _preview.Surface.FontSize = owner.Surface.FontSize;

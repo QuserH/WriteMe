@@ -41,7 +41,7 @@ public sealed class SharedHub(SyncRepository repository)
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
         Room room;
         lock (_roomMembership) { room = _rooms.GetOrAdd(document, _ => new()); room.Leases++; }
-        var connection = new Connection(socket, token, new(connectionId, account, profile.DisplayName, profile.PublicId ?? "", color), data.Document.WorkspaceId, document);
+        var connection = new Connection(socket, token, new(connectionId, account, profile.DisplayName, profile.PublicId ?? "", color, Avatar: profile.Avatar), data.Document.WorkspaceId, document);
         room.Connections[connectionId] = connection;
         try
         {
@@ -74,6 +74,7 @@ public sealed class SharedHub(SyncRepository repository)
                     else if (message.Type == "update")
                     {
                         if (message.Update == null || message.Vector == null || message.Id is not { Length: > 0 and <= 100 }) throw new InvalidDataException("更新信息缺失");
+                        if (current.SyncPaused) { await connection.Send(new("permissions"), cancellation); continue; }
                         try
                         {
                             var accepted = repository.ApplySharedUpdate(account, document, message.Update, message.Vector);
@@ -85,6 +86,11 @@ public sealed class SharedHub(SyncRepository repository)
                         {
                             using var replica = new SharedDocumentReplica(current.State);
                             await connection.Send(new("sync", replica.Difference(message.Vector), replica.StateVector()), cancellation);
+                        }
+                        catch (SharedAccessException e) when (e.Status == 423)
+                        {
+                            // An administrator can pause between reading permissions and committing.
+                            await connection.Send(new("permissions"), cancellation);
                         }
                     }
                     else if (message.Type is "presence" or "ping")
@@ -123,7 +129,17 @@ public sealed class SharedHub(SyncRepository repository)
         try { return repository.Authenticate(connection.Token) == connection.Peer.AccountId && repository.SharedDocument(connection.Peer.AccountId, connection.Document).Document.WorkspaceId == connection.Workspace; }
         catch (SharedAccessException) { return false; }
     }
-    private Task Presence(Room room, CancellationToken cancellation) => Broadcast(room, new("peers", Peers: room.Connections.Values.Where(CanRead).Select(connection => connection.Peer).ToArray()), cancellation);
+    private Task Presence(Room room, CancellationToken cancellation)
+    {
+        var peers = room.Connections.Values.Where(CanRead).Select(connection =>
+        {
+            var profile = repository.Profile(connection.Peer.AccountId);
+            return connection.Peer = connection.Peer with { DisplayName = profile.DisplayName, PublicId = profile.PublicId ?? "", Avatar = profile.Avatar };
+        }).ToArray();
+        return Broadcast(room, new("peers", Peers: peers), cancellation);
+    }
+    public Dictionary<string, int> AccountConnections() => _rooms.Values.SelectMany(room => room.Connections.Values).Where(CanRead)
+        .GroupBy(connection => connection.Peer.AccountId).ToDictionary(group => group.Key, group => group.Count());
     private async Task Broadcast(Room room, SharedWireMessage message, CancellationToken cancellation, string? except = null)
     {
         foreach (var connection in room.Connections.Values.Where(connection => connection.Peer.ConnectionId != except))
@@ -157,12 +173,16 @@ public sealed class SharedHub(SyncRepository repository)
                     }
                     catch (Exception e) when (e is SharedAccessException or OperationCanceledException or WebSocketException)
                     {
+                        // Remove the revoked connection before broadcasting presence; otherwise that
+                        // broadcast aborts the socket and discards the error and close frame below.
+                        room.Connections.TryRemove(connection.Peer.ConnectionId, out _);
                         try { using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2)); await connection.Send(new("error", Error: "账号、成员权限或文档状态已改变，请重新打开工作区"), timeout.Token); }
                         catch (Exception sendError) when (sendError is WebSocketException or OperationCanceledException) { }
                         try { using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2)); await connection.Socket.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, "权限已改变", timeout.Token); }
                         catch (Exception closeError) when (closeError is WebSocketException or OperationCanceledException) { connection.Socket.Abort(); }
                     }
                 }
+                using var presenceTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5)); await Presence(room, presenceTimeout.Token);
             }
             finally { room.Gate.Release(); }
         }

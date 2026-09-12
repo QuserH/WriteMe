@@ -55,7 +55,7 @@ public static class SyncServerHost
         {
             var bytes = await SyncProtocol.ReadLimitedAsync(context.Request.Body, 8192, context.RequestAborted);
             var login = JsonSerializer.Deserialize<SyncLogin>(bytes, SyncProtocol.Json) ?? throw new InvalidDataException();
-            var result = repository.Login(login); return result == null ? Results.Unauthorized() : Results.Json(result, SyncProtocol.Json);
+            var result = repository.Login(login, SyncRepository.SessionDevice(context.Request.Headers.UserAgent.ToString())); return result == null ? Results.Unauthorized() : Results.Json(result, SyncProtocol.Json);
         }).RequireRateLimiting("login");
         app.MapPost("/api/logout", async (HttpContext context, SyncRepository repository, SharedHub hub) => { repository.Logout((string)context.Items["token"]!); context.Response.Cookies.Delete(SharedRoutes.SessionCookie); await hub.Recheck(account: (string)context.Items["account"]!); return Results.NoContent(); });
         app.MapPost("/api/sync", async (HttpContext context, SyncRepository repository) =>

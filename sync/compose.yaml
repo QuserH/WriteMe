@@ -8,7 +8,7 @@ services:
       - "${WRITEME_SYNC_BIND:-127.0.0.1}:${WRITEME_SYNC_PORT:-8787}:8080"
     environment:
       WRITEME_SETUP_USER: ${WRITEME_SETUP_USER:?Set WRITEME_SETUP_USER in .env}
-      WRITEME_SETUP_PASSWORD: ${WRITEME_SETUP_PASSWORD:?Set a unique password of at least 12 characters in .env}
+      WRITEME_SETUP_PASSWORD: ${WRITEME_SETUP_PASSWORD:?Set a unique password of at least 6 characters in .env}
     volumes:
       - writeme-data:/data
 volumes:

@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using WriteMe.Core;
 using WriteMe.Desktop.Editing;
 
@@ -30,6 +31,8 @@ public sealed partial class SharedWorkspaceWindow
     private Button? _trashShared;
     private string _role = "viewer";
     private bool _rejected;
+    private bool _syncPaused;
+    private bool _commentPositionQueued;
     private byte[]? _serverVector;
     private long _revision;
     private long _sequence;
@@ -50,7 +53,7 @@ public sealed partial class SharedWorkspaceWindow
         var replica = new SharedDocumentReplica(data.State);
         try { if (useDraft && _drafts.Load(api.Endpoint.AbsoluteUri, profile.Id, id) is { } saved) { replica.Apply(saved); _ = replica.Read(); } }
         catch { replica.Dispose(); throw; }
-        _shared = new(replica, profile.DisplayName, profile.Id, data.Role == "owner"); _sharedInfo = data.Document; _role = data.Role; _rejected = false; _serverVector = null; _revision = _sequence = 0; _sent.Clear();
+        _shared = new(replica, profile.DisplayName, profile.Id, data.Role == "owner"); _sharedInfo = data.Document; _role = data.Role; _syncPaused = data.SyncPaused; _rejected = false; _serverVector = null; _revision = _sequence = 0; _sent.Clear();
         _shared.Session.IsReadOnly = !CanWriteShared;
         if (!useDraft) SaveDraft();
         BuildDocument(); _shared.LocalUpdate += LocalUpdate; _shared.Refreshed += (_, _) => RefreshSharedUi();
@@ -78,6 +81,7 @@ public sealed partial class SharedWorkspaceWindow
     {
         if (_shared == null) return;
         _heading.Text = _workspace?.Name; _editor = new(_shared.Session); _tools = new(_editor) { Margin = new(8, 4, 12, 14), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+        _editor.CommentAvatarFactory = MessageAvatar;
         _documentLayout = new Grid { ColumnDefinitions = new("*,56"), RowDefinitions = new("*") };
         _headerActions.Children.Clear(); var toolbar = _headerActions;
         _peers = Label("正在连接…", 11, Ui.Muted); _peers.Margin = new(0, 0, 16, 0); toolbar.Children.Add(_peers);
@@ -105,27 +109,68 @@ public sealed partial class SharedWorkspaceWindow
         var footer = _saveStatus; footer.Margin = new(32, 10, 32, 18); Grid.SetRow(footer, 2); paper.Children.Add(footer);
         var card = new Border { Child = paper, Background = Ui.Surface, CornerRadius = new(22), BorderBrush = Ui.Line, BorderThickness = new(1), Margin = new(6, 0, 4, 8) };
         Grid.SetRow(card, 0); _documentLayout.Children.Add(card); Grid.SetColumn(_tools, 1); Grid.SetRow(_tools, 0); _documentLayout.Children.Add(_tools);
-        _comments = new(_editor) { Margin = new(8, 0, 8, 8), IsVisible = false }; _comments.Bind(_sharedInfo!.Id, _shared.Session); Grid.SetRow(_comments, 0); Grid.SetColumn(_comments, 1); _documentLayout.Children.Add(_comments);
-        _comments.CloseRequested += (_, _) => { _comments.IsVisible = false; _tools.IsVisible = true; AdjustSharedSidebars(); };
-        _comments.OverviewRequested += (_, _) => { _comments.ClearContext(); AdjustSharedSidebars(); };
+        _comments = new(_editor) { Margin = new(8, 0, 8, 8), IsVisible = false, ZIndex = 30, AvatarFactory = message => MessageAvatar(message), AuthorLabel = MessageAuthor }; _comments.Bind(_sharedInfo!.Id, _shared.Session); Grid.SetRow(_comments, 0); Grid.SetColumn(_comments, 1); _documentLayout.Children.Add(_comments);
+        _comments.CloseRequested += (_, _) => CloseSharedComments();
+        _comments.OverviewRequested += (_, _) => OpenSharedComments();
+        _comments.Updated += (_, _) => QueueSharedCommentPosition();
         _editor.CommentRequested += anchor => { OpenSharedComments(); _comments.Compose(anchor); };
         _editor.CommentInvoked += id => { OpenSharedComments(); _comments.ShowThread(id); };
-        _editor.ParagraphCommentsRequested += anchor => { OpenSharedComments(); _comments.ShowParagraph(anchor); };
+        _editor.ParagraphCommentsRequested += OpenSharedParagraphComments;
+        _editor.CommentGeometryChanged += QueueSharedCommentPosition;
         _editor.SelectionChanged += async (_, _) => { if (_socket != null && _shared != null) await _socket.Send(new("presence", BlockId: _shared.Session.Selection.Caret.NodeId.ToString("D"))); };
         _tools.PanelChanged += (_, _) => AdjustSharedSidebars(); _screen.Content = _documentLayout;
         _documentLayout.AddHandler(KeyDownEvent, (_, e) => { if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key == Key.M) { e.Handled = true; if (CanWriteShared) _editor.RequestComment(); } }, RoutingStrategies.Tunnel);
         _tools.IsEnabled = CanWriteShared; _documentTitle.IsReadOnly = !CanWriteShared;
-        _documentLayout.SizeChanged += (_, _) => AdjustSharedSidebars(); AdjustSharedSidebars();
+        _documentLayout.SizeChanged += (_, _) => { AdjustSharedSidebars(); QueueSharedCommentPosition(); }; AdjustSharedSidebars();
+        _documentLayout.AddHandler(PointerPressedEvent, (_, args) =>
+        {
+            if (_comments?.IsVisible != true || !_comments.IsContextual || _comments.IsComposing) return;
+            if (args.Source is Visual visual && (visual == _comments || visual.GetVisualAncestors().Contains(_comments))) return;
+            CloseSharedComments();
+        }, RoutingStrategies.Tunnel);
     }
-    private bool CanWriteShared => !_rejected && SharedProtocol.CanWrite(_role);
+    private bool CanWriteShared => !_rejected && !_syncPaused && SharedProtocol.CanWrite(_role);
     private void OpenSharedComments()
     {
-        if (_comments == null || _tools == null) return; _comments.ClearContext(); _comments.IsVisible = true; _comments.Refresh(); _tools.Close(); _tools.IsVisible = false; AdjustSharedSidebars();
+        if (_comments == null || _tools == null || _comments.IsComposing) return;
+        _comments.ClearContext(); _editor?.SelectCommentBlock(null); Grid.SetColumn(_comments, 1); Grid.SetColumnSpan(_comments, 1);
+        _comments.Width = CommentsPane.PanelWidth; _comments.Height = double.NaN; _comments.MaxHeight = double.PositiveInfinity;
+        _comments.HorizontalAlignment = HorizontalAlignment.Stretch; _comments.VerticalAlignment = VerticalAlignment.Stretch; _comments.Margin = new(8, 0, 8, 8); _comments.BoxShadow = default;
+        _comments.IsVisible = true; _comments.Refresh(); _tools.Close(); _tools.IsVisible = false; AdjustSharedSidebars();
+    }
+    private void OpenSharedParagraphComments(CommentAnchor anchor)
+    {
+        if (_comments == null || _tools == null || _comments.IsComposing) return;
+        _tools.Close(); _tools.IsVisible = true; _comments.IsVisible = true;
+        Grid.SetColumn(_comments, 0); Grid.SetColumnSpan(_comments, 2);
+        _comments.HorizontalAlignment = HorizontalAlignment.Left; _comments.VerticalAlignment = VerticalAlignment.Top;
+        _comments.Margin = new(12); _comments.BoxShadow = Ui.FloatingShadow; _comments.ShowParagraph(anchor); AdjustSharedSidebars(); QueueSharedCommentPosition();
+    }
+    private void QueueSharedCommentPosition()
+    {
+        if (_commentPositionQueued || _comments?.IsVisible != true || !_comments.IsContextual) return; _commentPositionQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _commentPositionQueued = false;
+            if (_comments?.IsVisible != true || !_comments.IsContextual || _documentLayout == null || _editor == null || _comments.ContextNode is not { } node) return;
+            if (_editor.CommentBounds(node, _documentLayout) is not { } rect) { if (!_comments.IsComposing) CloseSharedComments(); return; }
+            var width = Math.Min(352, Math.Max(240, _documentLayout.Bounds.Width - 24));
+            var height = Math.Min(Math.Clamp(_comments.PreferredContextHeight(width), 160, 500), Math.Max(160, _documentLayout.Bounds.Height - 24));
+            var top = rect.Bottom + height + 20 <= _documentLayout.Bounds.Height ? rect.Bottom + 8 : rect.Top - height - 8;
+            _comments.Width = width; _comments.Height = height; _comments.MaxHeight = height;
+            _comments.Margin = new(Math.Clamp(rect.X, 12, Math.Max(12, _documentLayout.Bounds.Width - width - 12)),
+                Math.Clamp(top, 12, Math.Max(12, _documentLayout.Bounds.Height - height - 12)), 0, 0);
+        }, DispatcherPriority.Render);
+    }
+    private void CloseSharedComments()
+    {
+        if (_comments == null || _comments.IsComposing) return;
+        _comments.IsVisible = false; _editor?.SelectComment(null); _editor?.SelectCommentBlock(null); if (_tools != null) _tools.IsVisible = true; AdjustSharedSidebars();
     }
     private void AdjustSharedSidebars()
     {
         if (_documentLayout == null || _tools == null) return;
-        var comments = _comments?.IsVisible == true;
+        var comments = _comments?.IsVisible == true && !_comments.IsContextual;
         if (_peers != null) _peers.IsVisible = Bounds.Width >= 1150;
         _documentLayout.ColumnDefinitions[1].Width = new(comments ? 340 : _tools.IsOpen ? 300 : 56);
         _tools.MaxHeight = Math.Max(180, Bounds.Height - 120); _tools.Height = _tools.IsOpen ? _tools.MaxHeight : double.NaN;
@@ -161,16 +206,21 @@ public sealed partial class SharedWorkspaceWindow
             {
                 case "sync":
                     if (message.Update != null) QueueSharedUpdate(message.Update); _serverVector = message.Vector; _sent.Clear();
-                    if (CanWriteShared) await FlushAsync(); else if (_saveStatus != null) _saveStatus.Text = "已连接 · 仅阅读";
+                    if (CanWriteShared) await FlushAsync(); else if (_saveStatus != null) _saveStatus.Text = _syncPaused ? "管理员已暂停写入 · 草稿保留在此设备" : "已连接 · 仅阅读";
                     break;
                 case "update": if (message.Update != null) QueueSharedUpdate(message.Update); break;
                 case "ack":
                     _serverVector = message.Vector;
-                    if (message.Id != null && _sent.Remove(message.Id, out var revision) && revision == _revision && _saveStatus != null) _saveStatus.Text = "所有更改已保存";
+                    if (message.Id != null && _sent.Remove(message.Id, out var revision) && revision == _revision && _saveStatus != null && !_syncPaused) _saveStatus.Text = "所有更改已保存";
                     break;
                 case "peers": if (_peers != null) _peers.Text = string.Join(" · ", (message.Peers ?? []).DistinctBy(peer => peer.AccountId).Select(peer => peer.DisplayName)) + "  在线"; break;
                 case "permissions":
-                    if (_sharedInfo != null) { var data = await _api!.Request<SharedDocumentData>("shared/" + _sharedInfo.Id, cancellation: _lifetime.Token); _role = data.Role; _shared.Session.CanModerateComments = _role == "owner"; RefreshSharedUi(); }
+                    if (_sharedInfo != null)
+                    {
+                        var data = await _api!.Request<SharedDocumentData>("shared/" + _sharedInfo.Id, cancellation: _lifetime.Token); _role = data.Role; _syncPaused = data.SyncPaused; _shared.Session.CanModerateComments = _role == "owner"; RefreshSharedUi();
+                        if (CanWriteShared) await FlushAsync(); else if (_saveStatus != null) _saveStatus.Text = _syncPaused ? "管理员已暂停写入 · 草稿保留在此设备" : "已连接 · 仅阅读";
+                        await RefreshPeopleAsync();
+                    }
                     break;
                 case "error":
                     Reject(message.Error ?? "无法保存到服务器"); break;

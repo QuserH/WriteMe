@@ -20,7 +20,11 @@ public sealed class SharedApiClient : IDisposable
         Endpoint = SharedProtocol.Endpoint(endpoint); ValidateLogin(login); Login = login;
         _http = CreateHttp(); _http.BaseAddress = Endpoint; _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Token);
     }
-    private static HttpClient CreateHttp() => new(new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(10), PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = TimeSpan.FromSeconds(30) };
+    private static HttpClient CreateHttp()
+    {
+        var client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(10), PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = TimeSpan.FromSeconds(30) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("WriteME.Native/0.1"); return client;
+    }
     private static void ValidateLogin(SyncLoginResult login)
     {
         if (!SyncProtocol.ValidId(login.AccountId) || login.Token is not { Length: >= 32 and <= 128 } || login.Token.Any(char.IsControl) || login.ExpiresAt <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
@@ -52,6 +56,12 @@ public sealed class SharedApiClient : IDisposable
         return JsonSerializer.Deserialize<T>(bytes, SyncProtocol.Json) ?? throw new InvalidDataException("服务器返回为空");
     }
     public void Dispose() => _http.Dispose();
+    public async Task<byte[]> Avatar(string account, string version, CancellationToken cancellation = default)
+    {
+        if (!SyncProtocol.ValidId(account) || !NoteStore.IsAssetId(version)) throw new ArgumentException("头像标识无效");
+        using var response = await _http.GetAsync($"api/avatars/{account}/{version}", HttpCompletionOption.ResponseHeadersRead, cancellation);
+        response.EnsureSuccessStatusCode(); return await SyncProtocol.ReadLimitedAsync(await response.Content.ReadAsStreamAsync(cancellation), AccountProfiles.MaximumAvatarBytes, cancellation);
+    }
 }
 
 // Note: 双端同一 WebSocket 协议、确认后已保存、本机草稿与账号隔离 — 见 .agents/notes/implemented/architecture/2026-09-12-shared-workspaces-and-realtime.md

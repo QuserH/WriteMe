@@ -24,8 +24,15 @@ async function execute(command) {
     case "insert":
       await body.click(); await page.keyboard.press(command.end ? "Control+End" : "Control+Home");
       for (let i = 0; i < (command.offset ?? 0); i++) await page.keyboard.press("ArrowRight");
+      // Chromium queues selectionchange after keyboard navigation. Wait for the real
+      // editor caret before toggling a stored mark, rather than racing that event.
+      await expect.poll(() => body.evaluate((element, target) => {
+        const state = element.editor.state;
+        return state.selection.empty && state.selection.from === (target.end ? state.doc.content.size - 1 : 1 + (target.offset ?? 0));
+      }, command)).toBe(true);
       if (command.italic) await page.keyboard.press("Control+i");
       await page.keyboard.insertText(command.text);
+      if (command.italic) await expect(body.locator("em")).toContainText(command.text);
       if (command.italic) await page.keyboard.press("Control+i");
       return { text: await body.innerText() };
     case "expect":
@@ -36,13 +43,13 @@ async function execute(command) {
       await saved(); return { text: await body.innerText() };
     case "undo": await body.click(); await page.keyboard.press("Control+z"); await saved(); return {};
     case "reply":
-      if (!await page.locator(".shared-comments").count()) await page.locator(".shared-top-actions").getByRole("button", { name: /^评论/ }).click();
+      if (!await page.locator(".shared-comments").count()) await page.locator(".shared-top-actions").getByRole("button", { name: "查看全部评论" }).click();
       await expect(page.locator(".shared-message")).toContainText([command.parent]);
       await page.locator(".shared-message").filter({ hasText: command.parent }).getByRole("button", { name: "回复", exact: true }).click();
       await page.getByRole("textbox", { name: "评论内容" }).fill(command.text);
-      await page.getByRole("button", { name: /发送 ↑/ }).click(); await saved(); return {};
+      await page.getByRole("button", { name: "发送", exact: true }).click(); await saved(); return {};
     case "comments":
-      if (!await page.locator(".shared-comments").count()) await page.locator(".shared-top-actions").getByRole("button", { name: /^评论/ }).click();
+      if (!await page.locator(".shared-comments").count()) await page.locator(".shared-top-actions").getByRole("button", { name: "查看全部评论" }).click();
       for (const text of command.contains) await expect(page.locator(".shared-comment-list")).toContainText(text);
       await mkdir("artifacts/shared-qa/screens", { recursive: true });
       await page.screenshot({ path: "artifacts/shared-qa/screens/shared-mixed-browser.png" }); return {};

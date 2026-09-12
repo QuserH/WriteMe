@@ -3,18 +3,18 @@ using System.Net;
 
 namespace WriteMe.Core;
 
-public sealed record SharedProfile(string Id, string Username, string? PublicId, string DisplayName, bool IsAdmin, bool Disabled, bool NeedsSetup);
+public sealed record SharedProfile(string Id, string Username, string? PublicId, string DisplayName, bool IsAdmin, bool Disabled, bool NeedsSetup, SharedAvatar? Avatar = null, bool SyncPaused = false);
 public sealed record SharedProfileSetup(string PublicId, string DisplayName, string Password);
 public sealed record SharedAccountInput(string Username, string Password, bool IsAdmin = false);
-public sealed record SharedAccountChange(bool? Disabled = null, bool? IsAdmin = null, string? Password = null);
+public sealed record SharedAccountChange(bool? Disabled = null, bool? IsAdmin = null, string? Password = null, string? Username = null, string? DisplayName = null, bool? SyncPaused = null);
 public sealed record SharedWorkspace(string Id, string Name, string Role, long CreatedAt);
 public sealed record SharedWorkspaceInput(string Name);
-public sealed record SharedMember(string AccountId, string PublicId, string DisplayName, string Role);
+public sealed record SharedMember(string AccountId, string PublicId, string DisplayName, string Role, SharedAvatar? Avatar = null);
 public sealed record SharedMemberInput(string PublicId, string Role = "editor");
 public sealed record SharedDocumentInfo(string Id, string WorkspaceId, string Title, long UpdatedAt, bool Deleted = false);
 public sealed record SharedDocumentInput(string Title = "无标题");
-public sealed record SharedDocumentData(SharedDocumentInfo Document, string Role, byte[] State, int Protocol = 1);
-public sealed record SharedPeer(string ConnectionId, string AccountId, string DisplayName, string PublicId, string Color, string? BlockId = null);
+public sealed record SharedDocumentData(SharedDocumentInfo Document, string Role, byte[] State, int Protocol = 1, bool SyncPaused = false);
+public sealed record SharedPeer(string ConnectionId, string AccountId, string DisplayName, string PublicId, string Color, string? BlockId = null, SharedAvatar? Avatar = null);
 public sealed record SharedWireMessage(string Type, byte[]? Update = null, byte[]? Vector = null, string? Id = null,
     string? Error = null, SharedPeer[]? Peers = null, string? BlockId = null);
 

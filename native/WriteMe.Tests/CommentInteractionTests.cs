@@ -65,6 +65,42 @@ public sealed class CommentInteractionTests
         return Find<Button>(editor, "BlockComment_" + nodeId);
     }
 
+    [AvaloniaTheory]
+    [InlineData(1.2)]
+    [InlineData(2.4)]
+    public void ParagraphSummaryReservesOneFooterAfterWrappedAndMultilineTextAndUndoRestoresGeometry(double spacing)
+    {
+        var text = string.Concat(Enumerable.Repeat("中文段落自动换行也要对齐。", 6)) + "\n逻辑行尾的文字仍然保持原来的光标。";
+        var paragraph = NoteNode.Paragraph(text); var tail = NoteNode.Paragraph("下一段正文不能与评论入口重叠。");
+        var editor = new BlockEditor(new(Doc(paragraph, tail)));
+        editor.Surface.Options.LineHeightFactor = spacing;
+        var window = new Window { Width = 570, Height = 640, Content = editor }; window.Show(); editor.FocusText(); Frame(window);
+        try
+        {
+            var view = editor.Surface.TextArea.TextView;
+            var row = editor.Session.Projection.Find(paragraph.Id)!;
+            var projection = editor.Session.Projection.Text;
+            var before = view.VisualLines.Where(line => line.FirstDocumentLine.Offset <= row.End).ToArray();
+            Assert.True(before.Sum(line => line.TextLines.Count) > 2);
+            var height = before.Sum(line => line.Height); var baselines = before.SelectMany(line => line.TextLines.Select(textLine => line.GetTextLineVisualYPosition(textLine, VisualYPosition.Baseline))).ToArray();
+            var nextTop = view.VisualLines.Single(line => line.FirstDocumentLine.Offset == editor.Session.Projection.Find(tail.Id)!.Start).VisualTop;
+            editor.Surface.CaretOffset = row.End; Frame(window); var caret = editor.InputClient.CursorRectangle;
+            var thread = editor.Session.AddComment("放在整段最后一行下面", NoteComments.CaptureBlock(editor.Session, paragraph.Id)); Frame(window);
+            var after = view.VisualLines.Where(line => line.FirstDocumentLine.Offset <= row.End).ToArray();
+            Assert.Equal(height + 28, after.Sum(line => line.Height), 2);
+            Assert.Equal(baselines, after.SelectMany(line => line.TextLines.Select(textLine => line.GetTextLineVisualYPosition(textLine, VisualYPosition.Baseline))).ToArray());
+            Assert.Equal(caret, editor.InputClient.CursorRectangle); Assert.Equal(projection, editor.Session.Projection.Text);
+            var bubble = Find<Button>(editor, "BlockComment_" + paragraph.Id); var top = bubble.TranslatePoint(default, view)!.Value.Y;
+            Assert.True(top > caret.Bottom); Assert.True(top + bubble.Bounds.Height <= nextTop + 28 + 1);
+            Assert.Equal(nextTop + 28, view.VisualLines.Single(line => line.FirstDocumentLine.Offset == editor.Session.Projection.Find(tail.Id)!.Start).VisualTop, 2);
+            Assert.Single(NoteComments.For(editor.Session.Root).Threads, item => item.Id == thread);
+            editor.Session.Undo(); Frame(window);
+            Assert.Equal(height, view.VisualLines.Where(line => line.FirstDocumentLine.Offset <= row.End).Sum(line => line.Height), 2);
+            Assert.Equal(caret, editor.InputClient.CursorRectangle);
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaFact]
     public async Task TitleComposerReplyEditAndDeletionAreUsableAndSavedOnClose()
     {

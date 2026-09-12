@@ -13,19 +13,22 @@ namespace WriteMe.Desktop.Editing;
 // Note: 段落入口和浮层定位跟随可见原生行，见 .agents/notes/implemented/feature/2026-09-11-native-comments.md
 public sealed partial class BlockEditor
 {
-    private readonly Canvas _commentMarkers = new() { HorizontalAlignment = HorizontalAlignment.Right, ZIndex = 12, Background = Brushes.Transparent };
+    private readonly Canvas _commentMarkers = new() { HorizontalAlignment = HorizontalAlignment.Stretch, ZIndex = 12 };
     private readonly Dictionary<Guid, Button> _commentButtons = [];
     private bool _commentMarkersQueued;
     private Guid? _commentBlock;
     internal Guid? CommentBlock => OverlayOwner._commentBlock;
     internal event Action? CommentGeometryChanged;
     public event Action<CommentAnchor>? ParagraphCommentsRequested;
+    public Func<CommentMessage, double, Control>? CommentAvatarFactory { get; set; }
+    internal Func<CommentMessage, double, Control>? ResolvedCommentAvatarFactory => OverlayOwner.CommentAvatarFactory ?? CommentAvatarFactory;
+    internal double CommentFooterHeight(Guid node) => Comments.InBlock(node).Any(thread => thread.Messages.Any(message => !message.Deleted)) ? 28 : 0;
+    internal void RefreshAccountComments() => RefreshCommentHighlights();
 
     private void InitializeParagraphComments()
     {
         var width = IsCompact ? 24 : 38;
-        _commentMarkers.Width = width;
-        Surface.Margin = new(0, 0, width, 0);
+        Surface.Margin = IsDragPreview ? new(0) : new(0, 0, width, 0);
         _layout.Children.Add(_commentMarkers);
         var view = Surface.TextArea.TextView;
         view.VisualLinesChanged += (_, _) => QueueCommentMarkers();
@@ -42,7 +45,7 @@ public sealed partial class BlockEditor
 
     private void QueueCommentMarkers()
     {
-        if (IsDragPreview || _disposed || _commentMarkersQueued) return;
+        if (_disposed || _commentMarkersQueued) return;
         _commentMarkersQueued = true;
         Dispatcher.UIThread.Post(() =>
         {
@@ -54,7 +57,7 @@ public sealed partial class BlockEditor
 
     private void RefreshCommentMarkers()
     {
-        if (_disposed || IsDragPreview) return;
+        if (_disposed) return;
         var view = Surface.TextArea.TextView;
         if (!view.VisualLinesValid) return;
         var visible = new HashSet<Guid>();
@@ -63,6 +66,7 @@ public sealed partial class BlockEditor
             var row = Session.Projection.At(line.FirstDocumentLine.Offset);
             var threads = Comments.InBlock(row.Node.Id);
             var count = threads.Sum(thread => thread.Messages.Count(message => !message.Deleted));
+            if (count > 0 && line.LastDocumentLine.EndOffset < row.End) continue;
             var selected = CommentBlock == row.Node.Id || threads.Any(thread => thread.Id == ActiveComment);
             if (_dragSource != null || (count == 0 && !selected && HoveredBlockId != row.Block.Id)) continue;
             var y = line.VisualTop - view.ScrollOffset.Y;
@@ -71,22 +75,41 @@ public sealed partial class BlockEditor
             if (!_commentButtons.TryGetValue(row.Node.Id, out var button))
             {
                 var id = row.Node.Id; var session = Session;
-                button = new Button { Width = _commentMarkers.Width - 2, Height = 26, MinHeight = 0, MinWidth = 0, Padding = new(0), CornerRadius = new(8), Classes = { "quiet" } };
+                button = new Button { Height = 26, MinHeight = 0, MinWidth = 0, Padding = new(0), CornerRadius = new(6), HorizontalContentAlignment = HorizontalAlignment.Left, Classes = { "quiet" } };
                 button.Click += (_, _) => { if (session == Session) OpenParagraphComments(id); };
                 AutomationProperties.SetAutomationId(button, "BlockComment_" + id);
                 _commentButtons[id] = button; _commentMarkers.Children.Add(button);
             }
-            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            content.Children.Add(new SidebarGlyph(SidebarSymbol.Comment, 15));
-            if (count > 0 && !IsCompact) content.Children.Add(new TextBlock { Text = count > 99 ? "99+" : count.ToString(), FontSize = 10, VerticalAlignment = VerticalAlignment.Center });
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var available = Math.Max(36, view.Bounds.Width - TextStart(row));
+            if (count > 0)
+            {
+                var first = threads.SelectMany(thread => thread.Messages).First(message => !message.Deleted);
+                if (available > 115)
+                {
+                    var factory = ResolvedCommentAvatarFactory;
+                    content.Children.Add(factory?.Invoke(first, 19) ?? new Border { Width = 19, Height = 19, CornerRadius = new(10), Background = PageColor("#ECF1FA", "#354157"),
+                        Child = new TextBlock { Text = System.Globalization.StringInfo.GetNextTextElement(first.Author), FontSize = 9, Foreground = PageMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+                }
+                content.Children.Add(new TextBlock { Text = count + " 条评论", FontSize = 10, VerticalAlignment = VerticalAlignment.Center });
+                if (available > 210)
+                {
+                    var latest = threads.SelectMany(thread => thread.Messages).Where(message => !message.Deleted).Max(message => message.CreatedAt);
+                    var minutes = Math.Max(0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - latest) / 60000);
+                    content.Children.Add(new TextBlock { Text = minutes < 1 ? "刚刚" : minutes < 60 ? minutes + " 分钟前" : minutes < 1440 ? minutes / 60 + " 小时前" : DateTimeOffset.FromUnixTimeMilliseconds(latest).LocalDateTime.ToString("M/d"), FontSize = 9, Foreground = PageMuted, VerticalAlignment = VerticalAlignment.Center });
+                }
+            }
+            else content.Children.Add(new SidebarGlyph(SidebarSymbol.Comment, 15));
             button.Content = content;
-            button.Background = selected ? PageColor("#E9EFF7", "#31445D") : count > 0 ? PageColor("#F4F6F9", "#303C4D") : Brushes.Transparent;
+            button.Width = count > 0 ? double.NaN : 26; button.MaxWidth = available;
+            button.Background = selected ? PageColor("#E9EFF7", "#31445D") : Brushes.Transparent;
             button.Foreground = count > 0 || selected ? PageColor("#58789D", "#B4CCE9") : PageMuted;
             button.IsEnabled = IsEffectivelyEnabled && !IsAnyComposing && Comments.CanEdit;
             var label = count == 0 ? "评论这一段" : $"查看此段的 {count} 条评论和回复";
             AutomationProperties.SetName(button, label); ToolTip.SetTip(button, label);
-            var origin = view.TranslatePoint(new(0, Math.Clamp(y + 1, 0, Math.Max(0, view.Bounds.Height - 26))), _commentMarkers) ?? default;
-            Canvas.SetLeft(button, 1); Canvas.SetTop(button, origin.Y);
+            var origin = view.TranslatePoint(new(count > 0 ? TextStart(row) : view.Bounds.Width + 2,
+                count > 0 ? y + line.Height - CommentFooterHeight(row.Node.Id) : y + 1), _commentMarkers) ?? default;
+            Canvas.SetLeft(button, origin.X); Canvas.SetTop(button, origin.Y);
         }
         foreach (var (id, button) in _commentButtons.ToArray())
             if (!visible.Contains(id)) { _commentMarkers.Children.Remove(button); _commentButtons.Remove(id); }
@@ -115,12 +138,12 @@ public sealed partial class BlockEditor
             if (editor.Session.Projection.Find(nodeId) is not { } row) continue;
             var view = editor.Surface.TextArea.TextView;
             if (!view.VisualLinesValid) continue;
-            var line = view.VisualLines.FirstOrDefault(item => item.FirstDocumentLine.Offset == row.Start);
-            if (line == null) continue;
-            var top = line.VisualTop - view.ScrollOffset.Y;
-            if (top + line.Height < 0 || top > view.Bounds.Height) continue;
+            var lines = view.VisualLines.Where(item => item.FirstDocumentLine.Offset >= row.Start && item.FirstDocumentLine.Offset <= row.End).ToArray();
+            if (lines.Length == 0) continue;
+            var top = lines[0].VisualTop - view.ScrollOffset.Y; var bottom = lines[^1].VisualTop + lines[^1].Height - view.ScrollOffset.Y;
+            if (bottom < 0 || top > view.Bounds.Height) continue;
             if (view.TranslatePoint(new(editor.TextStart(row), Math.Max(0, top)), relativeTo) is { } point)
-                return new(point, new Size(Math.Max(1, view.Bounds.Width - editor.TextStart(row)), Math.Min(line.Height, view.Bounds.Height - Math.Max(0, top))));
+                return new(point, new Size(Math.Max(1, view.Bounds.Width - editor.TextStart(row)), Math.Min(bottom, view.Bounds.Height) - Math.Max(0, top)));
         }
         return null;
     }

@@ -14,6 +14,8 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 
 **用户约束（2026-09-12）**：使用 Craft 的冷白、白纸、深色文字与蓝色反馈，不用绿色主题或大块灰色登录插画。后台必须是独立 `/admin` 网页，不能嵌在 `/team` 笔记界面或 EXE 内。部署先服务同一局域网；个人资料不自动迁入共享工作区。
 
+**手机、账号与后台约束**：主要适配安卓 Chrome/Edge；手机评论必须显示回复并让输入/发送位于可见视口内。已评论段落在段下显示头像/数量/时间，桌面就近浮层、手机底部弹层。新密码最低 6 字符；网页与原生可自定义头像/名字/ID。管理员可修改自身登录名和密码，后台展示账号同步数据、工作区与登录设备，暂停写入/设备退出保留数据和草稿。
+
 ## 技术栈与代码地图
 
 ### 当前原生版
@@ -40,7 +42,8 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 折叠排版 | 矢量三角、28px 标记列/缩进、长标题续行与选区坐标 | `native/WriteMe.Desktop/Editing/ToggleDisclosureButton.cs` / `BlockRendering.cs` / `BlockTextFormatter.cs` |
 | 文档核心 | 不可变文档树、TipTap JSON、可见投影、富文本、统一历史、结构移动 | `native/WriteMe.Core/` |
 | 本地存储 | Microsoft.Data.Sqlite，独立原生库及旧库在线备份导入 | `native/WriteMe.Core/NoteStore.cs` |
-| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 290 项，含真实 HTTP/WebSocket 与 Chromium 联动 | `native/WriteMe.Tests/` |
+| 原生回归 | xUnit + Avalonia.Headless.XUnit，目前 299 项，含真实 HTTP/WebSocket 与 Chromium 联动 | `native/WriteMe.Tests/` |
+| 账号资料与后台数据 | 六位密码、头像、稳定身份、数据/设备统计和写入暂停 | Core 的 `AccountProfiles.cs`，Server 的 `AccountManagement.cs`，Web 的 `ProfileSettings.tsx` / `AdminApp.tsx`，Desktop 的 `SharedWorkspaceWindow.Profile.cs` |
 | 发布 | 自带 .NET 运行时的 Windows 目录；最近成功版本清单 | `scripts/Publish-Native.ps1` / `Start-Native.ps1` → `artifacts/native/` |
 
 ### 保留的 Web / Tauri 基线

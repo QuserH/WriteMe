@@ -16,7 +16,8 @@ export default defineConfig({
     hmr: host
       ? { protocol: "ws", host, port: 1421 }
       : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
+    // Note: 原生构建和 QA 图片不是热更新输入，忽略以避免 Windows EBUSY — 见 .agents/notes/implemented/process/2026-09-10-source-only-repository.md
+    watch: { ignored: ["**/src-tauri/**", "**/native/**", "**/artifacts/**", "**/test-results/**", "**/playwright-report/**"] },
     proxy: { "/api": { target: process.env.WRITEME_DEV_SERVER || "http://127.0.0.1:8787", ws: true } },
   },
 });

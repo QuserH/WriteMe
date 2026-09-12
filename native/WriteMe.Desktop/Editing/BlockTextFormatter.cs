@@ -7,6 +7,7 @@ using AvaloniaEdit.Rendering;
 namespace WriteMe.Desktop.Editing;
 
 // Note: 折叠长标题的续行、选区和命中统一缩进 — 见 .agents/notes/implemented/feature/2026-09-09-toggle-block.md
+// Note: 段落评论页脚追加在原有行盒之后，绘制、基线与选区保持一致 — 见 .agents/notes/implemented/feature/2026-09-11-native-comments.md
 internal sealed class BlockTextFormatter(TextFormatter inner, BlockEditor owner) : TextFormatter
 {
     public static void Attach(TextView view, BlockEditor owner)
@@ -35,7 +36,13 @@ internal sealed class BlockTextFormatter(TextFormatter inner, BlockEditor owner)
             ? prefix.TextInset : 0;
         var line = inner.FormatLine(textSource, firstTextSourceIndex, Math.Max(1, paragraphWidth - inset),
             paragraphProperties, previousLineBreak);
-        return line is not null && inset > 0 ? new IndentedLine(line, inset) : line;
+        var footer = 0d;
+        if (line != null && textSource is ITextRunConstructionContext paragraph && line.FirstTextSourceIndex + line.Length >= paragraph.VisualLine.VisualLength)
+        {
+            var row = owner.Session.Projection.At(paragraph.VisualLine.FirstDocumentLine.Offset);
+            if (paragraph.VisualLine.LastDocumentLine.EndOffset >= row.End) footer = owner.CommentFooterHeight(row.Node.Id);
+        }
+        return line is not null && (inset > 0 || footer > 0) ? new IndentedLine(line, inset, footer, owner.Surface.TextArea.TextView.DefaultLineHeight) : line;
     }
 
     private sealed class AlignedProperties(TextParagraphProperties source, TextAlignment alignment) : TextParagraphProperties
@@ -63,17 +70,20 @@ internal sealed class BlockTextFormatter(TextFormatter inner, BlockEditor owner)
     [UnsafeAccessor(UnsafeAccessorKind.Constructor)]
     private static extern TextRunBounds CreateRunBounds(Rect bounds, int firstCharacterIndex, int length, TextRun textRun);
 
-    private sealed class IndentedLine(TextLine line, double inset) : TextLine
+    private sealed class IndentedLine(TextLine line, double inset, double footer = 0, double minimumHeight = 0) : TextLine
     {
+        // AvaloniaEdit centers short text lines inside DefaultLineHeight. Wrapping only Height
+        // consumes that centering space, moving the glyphs/caret and shortening the footer.
+        private double TopInset => footer > 0 ? Math.Max(0, minimumHeight - line.Height) / 2 : 0;
         public override IReadOnlyList<TextRun> TextRuns => line.TextRuns;
         public override int FirstTextSourceIndex => line.FirstTextSourceIndex;
         public override int Length => line.Length;
         public override TextLineBreak? TextLineBreak => line.TextLineBreak;
-        public override double Baseline => line.Baseline;
+        public override double Baseline => line.Baseline + TopInset;
         public override double Extent => line.Extent;
         public override bool HasCollapsed => line.HasCollapsed;
         public override bool HasOverflowed => line.HasOverflowed;
-        public override double Height => line.Height;
+        public override double Height => (footer > 0 ? Math.Max(line.Height, minimumHeight) : line.Height) + footer;
         public override int NewLineLength => line.NewLineLength;
         public override double OverhangAfter => line.OverhangAfter;
         public override double OverhangLeading => line.OverhangLeading;
@@ -85,12 +95,12 @@ internal sealed class BlockTextFormatter(TextFormatter inner, BlockEditor owner)
         public override int TrailingWhitespaceLength => line.TrailingWhitespaceLength;
 
         public override void Draw(DrawingContext drawingContext, Point lineOrigin)
-            => line.Draw(drawingContext, lineOrigin + new Vector(inset, 0));
+            => line.Draw(drawingContext, lineOrigin + new Vector(inset, TopInset));
 
         public override TextLine Collapse(params TextCollapsingProperties?[] collapsingPropertiesList)
         {
             var collapsed = line.Collapse(collapsingPropertiesList);
-            return ReferenceEquals(collapsed, line) ? this : new IndentedLine(collapsed, inset);
+            return ReferenceEquals(collapsed, line) ? this : new IndentedLine(collapsed, inset, footer, minimumHeight);
         }
 
         public override void Justify(JustificationProperties justificationProperties) => line.Justify(justificationProperties);
@@ -102,8 +112,8 @@ internal sealed class BlockTextFormatter(TextFormatter inner, BlockEditor owner)
 
         public override IReadOnlyList<TextBounds> GetTextBounds(int firstTextSourceCharacterIndex, int textLength)
             => line.GetTextBounds(firstTextSourceCharacterIndex, textLength).Select(bounds =>
-                CreateBounds(bounds.Rectangle.Translate(new(inset, 0)), bounds.FlowDirection,
-                    bounds.TextRunBounds.Select(run => CreateRunBounds(run.Rectangle.Translate(new(inset, 0)),
+                CreateBounds(bounds.Rectangle.Translate(new(inset, TopInset)), bounds.FlowDirection,
+                    bounds.TextRunBounds.Select(run => CreateRunBounds(run.Rectangle.Translate(new(inset, TopInset)),
                         run.TextSourceCharacterIndex, run.Length, run.TextRun)).ToArray())).ToArray();
 
         public override void Dispose() => line.Dispose();

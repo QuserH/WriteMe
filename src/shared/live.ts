@@ -1,11 +1,13 @@
 import { IndexeddbPersistence } from "y-indexeddb";
-import { api, fromBase64, toBase64, uuid, type Peer, type SharedDocData, type WireMessage, type Role } from "./api";
+import { api, fromBase64, toBase64, uuid, type Peer, type SharedDocData, type WireMessage, type Role, type Message } from "./api";
 import { localOrigin, WebReplica } from "./replica";
 
+export interface CommentContext { mode: "reply" | "edit"; threadId: string; message: Message }
 export class LiveDocument {
   readonly replica: WebReplica;
   readonly persistence: IndexeddbPersistence;
   readonly commentDrafts = new Map<string, string>();
+  readonly commentTargets = new Map<string, CommentContext>();
   private readonly generationKey: string;
   role: Role;
   status = "正在连接…";
@@ -17,6 +19,7 @@ export class LiveDocument {
   private retry?: ReturnType<typeof setTimeout>;
   private heartbeat?: ReturnType<typeof setInterval>;
   private disposed = false;
+  private permissionRevision = 0;
   private revision = 0;
   private sequence = 0;
   private inFlight = new Map<string, number>();
@@ -34,7 +37,7 @@ export class LiveDocument {
     });
     void this.persistence.whenSynced.then(() => { if (!this.disposed) this.connect(); });
   }
-  get canWrite() { return this.role !== "viewer" && !this.error; }
+  get canWrite() { return this.role !== "viewer" && !this.data.syncPaused && !this.error; }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private emit() { for (const listener of this.listeners) listener(); }
   private connect() {
@@ -47,19 +50,29 @@ export class LiveDocument {
         const message = JSON.parse(String(event.data)) as WireMessage;
         if (message.type === "sync") {
           if (message.update) this.apply(fromBase64(message.update)); this.serverVector = fromBase64(message.vector!);
-          this.inFlight.clear(); if (this.canWrite) this.flush(); else this.status = "已连接 · 仅阅读";
+          this.inFlight.clear(); if (this.canWrite) this.flush(); else this.status = this.data.syncPaused ? "管理员已暂停写入 · 草稿保留在此设备" : "已连接 · 仅阅读";
         } else if (message.type === "update") { if (message.update) this.apply(fromBase64(message.update)); }
         else if (message.type === "ack") {
           this.serverVector = fromBase64(message.vector!); const revision = this.inFlight.get(message.id!); this.inFlight.delete(message.id!);
-          if (revision === this.revision) this.status = "所有更改已保存";
+          if (revision === this.revision && this.canWrite) this.status = "所有更改已保存";
         } else if (message.type === "peers") this.peers = message.peers ?? [];
-        else if (message.type === "permissions") void api<SharedDocData>(`shared/${this.data.document.id}`).then(data => { this.role = data.role; if (!this.canWrite) this.status = "已连接 · 仅阅读"; this.emit(); }).catch(error => this.fail(error.message));
+        else if (message.type === "permissions") this.refreshPermissions();
         else if (message.type === "error") this.fail(message.error ?? "无法保存这次更改");
         this.emit();
       } catch (error) { this.fail(error instanceof Error ? error.message : "无法读取共享内容"); }
     };
     socket.onclose = () => { clearInterval(this.heartbeat); this.serverVector = undefined; this.peers = []; if (!this.disposed && !this.error) { this.status = "离线 · 修改保存在此浏览器"; this.emit(); this.retry = setTimeout(() => this.connect(), 2500); } };
     socket.onerror = () => { this.status = "连接中断 · 正在重连"; this.emit(); };
+  }
+  private refreshPermissions() {
+    const revision = ++this.permissionRevision;
+    void api<SharedDocData>(`shared/${this.data.document.id}`).then(data => {
+      if (this.disposed || revision !== this.permissionRevision) return;
+      this.role = data.role; this.data.syncPaused = data.syncPaused;
+      if (!this.canWrite) this.status = data.syncPaused ? "管理员已暂停写入 · 草稿保留在此设备" : "已连接 · 仅阅读";
+      else this.flush();
+      this.emit();
+    }).catch(error => { if (!this.disposed && revision === this.permissionRevision) this.fail(error.message); });
   }
   private fail(message: string) { this.error = message; this.status = "尚未保存到服务器 · 本地草稿已保留"; this.socket?.close(); this.emit(); }
   private send(message: WireMessage) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }

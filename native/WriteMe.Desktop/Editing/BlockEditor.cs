@@ -151,7 +151,7 @@ public sealed partial class BlockEditor : UserControl
         Content = _layout;
 
         InputClient = new(Surface);
-        if (!preview) InitializeParagraphComments();
+        InitializeParagraphComments();
         if (!preview) BlockCaretGeometry.Attach(Surface);
         Formatting = new(this);
         if (!preview) _layout.Children.Add(Formatting);

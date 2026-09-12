@@ -11,7 +11,7 @@ cp sync/.env.example sync/.env
 chmod 600 sync/.env
 ```
 
-Windows PowerShell 可以用 `Copy-Item sync/.env.example sync/.env`。编辑 `sync/.env`，填写自己的 `WRITEME_SETUP_USER` 和至少 12 个字符的独立密码；不要复用示例密码。`.env` 已被 Git 和 Docker 构建上下文排除。
+Windows PowerShell 可以用 `Copy-Item sync/.env.example sync/.env`。编辑 `sync/.env`，填写自己的 `WRITEME_SETUP_USER` 和至少 6 个字符的独立密码；不要复用示例密码。`.env` 已被 Git 和 Docker 构建上下文排除。
 
 `WRITEME_SYNC_PORT` 默认为 `8787`，已有服务占用时可以改成其他空闲端口。`WRITEME_SYNC_BIND` 默认 `127.0.0.1`，供同机反向代理或 SSH 隧道连接。供同一局域网使用时，显式设为 `0.0.0.0` 或服务器的局域网 IP，然后访问 `http://服务器IP:端口/team` 和 `http://服务器IP:端口/admin`。
 
@@ -39,7 +39,7 @@ docker compose -f sync/compose.yaml -f sync/compose.host-build.yaml --env-file s
 ## 独立后台与共享工作区
 
 1. 打开 `/admin`，使用启动账号登录，首次设置自己的显示名、个人 ID 与新密码。
-2. 在“账号管理”中创建伙伴的登录账号和临时密码。伙伴在 `/team` 登录，完成自己的个人 ID 与密码设置。
+2. 在“账号与同步”中创建伙伴的登录账号和临时密码。伙伴在 `/team` 登录，完成自己的个人 ID 与密码设置。创建、首次设置和更改密码的最低长度均为 6 个字符。
 3. 在笔记页创建工作区，用“工作区成员”按对方 ID 添加成员，分配所有者、可编辑或仅阅读权限。账号管理页面不嵌入笔记界面或 EXE。
 4. 原生程序打开顶栏共享工作区入口，填写相同服务地址（不带 `/admin` 或 `/team`）、账号和密码。两台设备打开同一文档，即可共同输入和逐条回复。
 
@@ -48,6 +48,12 @@ docker compose -f sync/compose.yaml -f sync/compose.host-build.yaml --env-file s
 共享评论支持段落留言、回复及回复的回复。只可编辑自己的消息，工作区所有者可以删除消息；删除回复保留位置与后续回复，没有“已解决/未解决”。读者可以展开折叠、复制文字和查看完整回复，展开状态只作用于自己的视图。
 
 临时密码首次设置会撤销其他临时登录；停用账号、重置密码或移除工作区成员会撤销对应访问。原生共享令牌用 Windows DPAPI 保存，与个人 M6 令牌分开。
+
+管理员可以在“编辑账号”中修改自己的登录名、名字和新密码，稳定账号身份和已有数据保留；本人改密码保留当前登录，其他设备重新登录。所有用户均可在“个人设置”设计文字/图片头像、修改个人 ID 和显示名，或核对当前密码后修改密码。
+
+“同步详情”展示个人同步文档/版本、附件大小、可访问的共享工作区和回收站、有效登录设备及在线编辑连接。暂停写入保留阅读与草稿，恢复后共享端继续上传；个人 M6 下次同步时重试。退出单设备、批量退出、停用账号均不删除文档。最近交换时间不等于所有设备都已完成同步；列表最多展示最近 200 条个人文档和登录记录。
+
+安卓浏览器采用抽屉导航、纵排分栏和表格独立横滚。段落下方的评论摘要在手机打开底部弹层，评论和回复可滚动，输入区根据键盘造成的可见视口变化调整；电脑和原生使用段落附近的浮层。
 
 ## 当前局域网部署
 
@@ -94,7 +100,7 @@ ssh -N -L 18789:127.0.0.1:8787 -p 22 user@server
 docker compose -f sync/compose.yaml --env-file sync/.env exec writeme-sync dotnet WriteME.SyncServer.dll --add-user second-user
 ```
 
-输入至少 12 个字符的密码并回车。通常使用 `/admin` 的账号管理即可。个人 M6 数据和附件按账号隔离，共享文档按工作区成员权限访问；登录名不区分大小写，现有账号不会被同名创建覆盖。
+输入至少 6 个字符的密码并回车。通常使用 `/admin` 的账号管理即可。个人 M6 数据和附件按账号隔离，共享文档按工作区成员权限访问；登录名不区分大小写，现有账号不会被同名创建覆盖。
 
 密码用独立盐和 PBKDF2-SHA256 保存，会话令牌只存哈希，30 天过期。客户端退出登录会清除本机凭据并尝试撤销服务端会话；服务器不可达时旧会话自然过期。Windows 客户端使用当前用户 DPAPI 保护令牌，不保存登录密码；其他系统当前不持久化令牌。
 
@@ -147,7 +153,7 @@ curl http://127.0.0.1:8787/health
 | 共享文档 | CRDT 状态最多 16 MiB、50,000 块、80 层、4,000,000 UTF-16 字符 |
 | 共享评论 | 每文档最多 1,000 条讨论、10,000 条消息、每消息 20,000 字 |
 
-完整原生回归共 290 项，包含 M6 真实 HTTP、共享 WebSocket、账号权限、消息作者校验、临时会话撤销、两原生窗口和 Chromium/原生联动。运行前先 `npm run build` 及 `npx playwright install chromium`。`npm run test:shared` 另验证 `/admin`、两个浏览器账号、评论、表格、离线恢复和只读展开，使用临时数据目录。
+完整原生回归共 299 项，包含 M6 真实 HTTP、共享 WebSocket、账号权限、消息作者校验、临时会话撤销、两原生窗口和 Chromium/原生联动。运行前先 `npm run build` 及 `npx playwright install chromium`。`npm run test:shared` 另验证 `/admin`、两个浏览器账号、评论、表格、离线恢复和只读展开，使用临时数据目录。
 
 Linux ARM64、Docker 29.7.1 / Compose 5.3.1 已完成新镜像的非 root 运行、双账号网页协作和重启持久化验证；生产服务保留旧资料卷并开放局域网 18789。升级前通过停止本项目容器复制完整资料卷，保留服务器和本机两份备份。旧 M6 的两 Windows C# 客户端、附件、冲突与空库恢复结果继续保留。构建使用 `compose.host-build.yaml`；其他服务不重启。验证产物在被忽略的 `artifacts/shared-qa/` 和 `artifacts/native/qa-remote-sync/`。
 

@@ -31,7 +31,7 @@ public sealed partial class SyncRepository : IDisposable
             command.CommandText = "SELECT COUNT(*) FROM accounts";
             if (Convert.ToInt64(command.ExecuteScalar()) == 0)
             {
-                if (string.IsNullOrEmpty(setupUser) || string.IsNullOrEmpty(setupPassword)) throw new InvalidOperationException("首次启动请设置 WRITEME_SETUP_USER 和 WRITEME_SETUP_PASSWORD（至少 12 个字符）");
+                if (string.IsNullOrEmpty(setupUser) || string.IsNullOrEmpty(setupPassword)) throw new InvalidOperationException("首次启动请设置 WRITEME_SETUP_USER 和 WRITEME_SETUP_PASSWORD（至少 6 个字符）");
                 var admin = CreateAccount(setupUser, setupPassword);
                 command.CommandText = "UPDATE accounts SET is_admin=1 WHERE id=$id"; command.Parameters.AddWithValue("$id", admin); command.ExecuteNonQuery();
             }
@@ -42,7 +42,8 @@ public sealed partial class SyncRepository : IDisposable
     public string CreateAccount(string username, string password)
     {
         username = username?.Trim() ?? "";
-        if (username.Length is < 1 or > 100 || username.Any(char.IsControl) || password is not { Length: >= 12 and <= 1024 }) throw new ArgumentException("账号名称无效，或密码不在 12–1024 字符范围内");
+        if (username.Length is < 1 or > 100 || username.Any(char.IsControl)) throw new ArgumentException("账号名称无效");
+        AccountProfiles.ValidatePassword(password);
         var salt = RandomNumberGenerator.GetBytes(32); var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 210000, HashAlgorithmName.SHA256, 32); var id = Guid.NewGuid().ToString("N");
         lock (_gate)
         {
@@ -51,7 +52,7 @@ public sealed partial class SyncRepository : IDisposable
         }
         return id;
     }
-    public SyncLoginResult? Login(SyncLogin login)
+    public SyncLoginResult? Login(SyncLogin login, string device = "桌面端或接口")
     {
         if (login.Username is not { Length: > 0 and <= 100 } || login.Password is not { Length: > 0 and <= 1024 }) return null;
         lock (_gate)
@@ -63,8 +64,9 @@ public sealed partial class SyncRepository : IDisposable
             if (!CryptographicOperations.FixedTimeEquals(actual, expected) || id == null) return null;
             var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var expiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeMilliseconds();
-            command.CommandText = "DELETE FROM sessions WHERE expires_at<$now; INSERT INTO sessions(token_hash,account_id,expires_at) VALUES($hash,$id,$expiry)";
-            command.Parameters.Clear(); command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); command.Parameters.AddWithValue("$hash", TokenHash(token)); command.Parameters.AddWithValue("$id", id); command.Parameters.AddWithValue("$expiry", expiry); command.ExecuteNonQuery();
+            command.CommandText = "DELETE FROM sessions WHERE expires_at<$now; INSERT INTO sessions(token_hash,account_id,expires_at,session_id,created_at,last_seen_at,device) VALUES($hash,$id,$expiry,$session,$now,$now,$device); UPDATE accounts SET last_login_at=$now WHERE id=$id";
+            command.Parameters.Clear(); command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); command.Parameters.AddWithValue("$hash", TokenHash(token)); command.Parameters.AddWithValue("$id", id); command.Parameters.AddWithValue("$expiry", expiry);
+            command.Parameters.AddWithValue("$session", Guid.NewGuid().ToString("N")); command.Parameters.AddWithValue("$device", new string(device.Where(c => !char.IsControl(c)).Take(160).ToArray())); command.ExecuteNonQuery();
             return new(token, id, expiry);
         }
     }
@@ -75,7 +77,10 @@ public sealed partial class SyncRepository : IDisposable
         lock (_gate)
         {
             using var command = _database.CreateCommand(); command.CommandText = "SELECT account_id FROM sessions JOIN accounts ON accounts.id=sessions.account_id WHERE token_hash=$hash AND expires_at>$now AND disabled=0";
-            command.Parameters.AddWithValue("$hash", TokenHash(token)); command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); return command.ExecuteScalar() as string;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            command.Parameters.AddWithValue("$hash", TokenHash(token)); command.Parameters.AddWithValue("$now", now); var account = command.ExecuteScalar() as string;
+            if (account != null) { command.CommandText = "UPDATE sessions SET last_seen_at=$now WHERE token_hash=$hash AND (last_seen_at IS NULL OR last_seen_at<$before)"; command.Parameters.AddWithValue("$before", now - 60000); command.ExecuteNonQuery(); }
+            return account;
         }
     }
     public void Logout(string token)
@@ -89,6 +94,7 @@ public sealed partial class SyncRepository : IDisposable
         foreach (var entity in request.Entities) SyncProtocol.Validate(entity);
         lock (_gate)
         {
+            if (request.Entities.Length > 0) EnsureSyncWrite(account);
             using var transaction = _database.BeginTransaction();
             using var command = _database.CreateCommand(); command.Transaction = transaction;
             var acknowledgements = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -123,6 +129,7 @@ public sealed partial class SyncRepository : IDisposable
                 var size = Encoding.UTF8.GetByteCount(state); if (bytes + size > SyncProtocol.MaximumBatchBytes - 65536) continue;
                 result[key] = SyncProtocol.Read<SyncEntity>(state); bytes += size;
             }
+            command.Parameters.Clear(); command.CommandText = "UPDATE accounts SET last_sync_at=$now WHERE id=$account"; command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); command.Parameters.AddWithValue("$account", account); command.ExecuteNonQuery();
             transaction.Commit(); return new(cursor, more, result.Values.ToArray());
         }
     }
@@ -135,6 +142,7 @@ public sealed partial class SyncRepository : IDisposable
     public async Task SaveAssetAsync(string account, string id, Stream source, CancellationToken cancellation)
     {
         if (!SyncProtocol.ValidId(account) || !NoteStore.IsAssetId(id)) throw new InvalidDataException("附件标识无效");
+        EnsureSyncWrite(account);
         var directory = Path.Combine(DataDirectory, "assets", account); Directory.CreateDirectory(directory); var temporary = Path.Combine(directory, ".upload-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -150,7 +158,11 @@ public sealed partial class SyncRepository : IDisposable
             }
             if (Convert.ToHexString(hash.GetHashAndReset()) != id) throw new InvalidDataException("附件内容与哈希不一致");
             var path = Path.Combine(directory, id);
-            try { File.Move(temporary, path, false); } catch (IOException) when (File.Exists(path)) { File.Delete(temporary); }
+            lock (_gate)
+            {
+                EnsureSyncWrite(account);
+                try { File.Move(temporary, path, false); } catch (IOException) when (File.Exists(path)) { File.Delete(temporary); }
+            }
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }

@@ -92,6 +92,8 @@ public sealed class CommentsPane : Border
     public event EventHandler? CloseRequested;
     public event EventHandler? Updated;
     public event EventHandler? OverviewRequested;
+    public Func<CommentMessage, Control>? AvatarFactory { get; set; }
+    public Func<CommentMessage, string>? AuthorLabel { get; set; }
 
     public CommentsPane(BlockEditor editor)
     {
@@ -206,7 +208,7 @@ public sealed class CommentsPane : Border
             var offset = _scroll.Offset; _list.Children.Clear();
             var threads = scoped.OrderByDescending(thread => thread.Messages[0].CreatedAt).ThenBy(thread => thread.Id).ToArray();
             if (index.Error != null) _list.Children.Add(Empty("评论暂不可用", index.Error));
-            else if (threads.Length == 0) _list.Children.Add(Empty("把想法留在这里", "在段落右侧点击评论气泡，\n可以留言，也可以回复每一条消息。"));
+            else if (threads.Length == 0) _list.Children.Add(Empty("把想法留在这里", "点击段落的评论入口，\n可以留言，也可以回复每一条消息。"));
             foreach (var thread in threads.Take(_limit)) _list.Children.Add(Card(thread, index));
             if (threads.Length > _limit) _list.Children.Add(Button($"显示更多（还有 {threads.Length - _limit} 条）", "显示更多评论", "CommentsMore", () => { _limit += 30; Refresh(true); }));
             _scroll.Offset = offset;
@@ -275,9 +277,9 @@ public sealed class CommentsPane : Border
             var head = new Grid { ColumnDefinitions = new("*,Auto") };
             var avatar = new Border { Width = 26, Height = 26, CornerRadius = new(13), Background = Ui.Chrome("#EFF2F6"), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left,
                 Child = new TextBlock { Text = StringInfo.GetNextTextElement(message.Author), FontSize = 10, Foreground = Ui.Chrome("#5B6573"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-            messageLayout.Children.Add(avatar);
+            messageLayout.Children.Add(AvatarFactory?.Invoke(message) ?? avatar);
             var byline = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            byline.Children.Add(new TextBlock { Text = message.Author, FontSize = 12, FontWeight = FontWeight.Medium });
+            byline.Children.Add(new TextBlock { Text = AuthorLabel?.Invoke(message) ?? message.Author, FontSize = 12, FontWeight = FontWeight.Medium });
             byline.Children.Add(new TextBlock { Text = DateTimeOffset.FromUnixTimeMilliseconds(message.CreatedAt).LocalDateTime.ToString("M/d HH:mm") + (message.EditedAt != null ? " · 已编辑" : ""), FontSize = 10, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center });
             head.Children.Add(byline);
             Button? menuButton = null;

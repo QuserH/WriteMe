@@ -1,0 +1,90 @@
+.shared-comment-anchor { display:block; max-width:100%; width:fit-content; font:400 12px/1.4 "Segoe UI","Microsoft YaHei UI",sans-serif; user-select:none; margin:5px 0 0; }
+.shared-app .shared-paragraph-comment { display:inline-flex; align-items:center; gap:8px; max-width:100%; background:transparent; border:0; border-radius:7px; padding:3px 5px 3px 0; color:#8a929d; font-size:11px; font-weight:400; line-height:22px; white-space:nowrap; }
+.shared-app .shared-paragraph-comment.has-comments { color:#677d9c; }
+.shared-app .shared-paragraph-comment:hover { color:#326ecf; background:#f1f5fd; }
+.shared-paragraph-comment time { color:#a0a6ae; font-size:10px; overflow:hidden; text-overflow:ellipsis; }
+.shared-comment-avatars { display:inline-flex; align-items:center; padding-left:1px; }
+.shared-comment-avatars .shared-avatar { width:21px; height:21px; font-size:9px; border:1px solid #fff; }
+.shared-comment-avatars .shared-avatar+span { margin-left:-7px; }
+.shared-comment-selected { background:#f2f6fe; border-radius:5px; }
+.shared-comments-layer { position:fixed; inset:var(--shared-visible-top,0px) 0 auto; height:var(--shared-visible-height,100dvh); min-height:0; z-index:1500; background:transparent; pointer-events:none; }
+.shared-comments { position:absolute; display:flex; flex-direction:column; min-height:0; width:364px; max-width:calc(100vw - 32px); max-height:min(680px,calc(var(--shared-visible-height,100dvh) - 32px)); background:#fff; border:1px solid #e7eaf0; border-radius:16px; box-shadow:0 12px 42px #1a263524,0 2px 6px #1a263508; overflow:hidden; outline:none; pointer-events:auto; }
+.shared-sheet-grip { display:none; }
+.shared-comments-heading { display:flex; align-items:center; justify-content:space-between; height:54px; padding:0 16px 0 20px; flex-shrink:0; border-bottom:1px solid #eff1f5; }
+.shared-comments-heading>div { display:flex; align-items:center; gap:8px; color:#7d8795; }
+.shared-comments-heading h3 { font-size:14px; font-weight:600; color:#252b33; }
+.shared-comments-heading>div>span { font-size:11px; border-radius:10px; background:#f1f4f9; padding:2px 6px; color:#72819a; }
+.shared-comment-context { display:flex; align-items:center; gap:14px; flex-shrink:0; padding:12px 20px; border-bottom:1px solid #f0f2f5; }
+.shared-comment-context p { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; line-height:1.8; color:#8b939f; user-select:text; }
+.shared-comment-context button { border:0; background:transparent; font-size:11px; color:#547db9; padding:4px 0; flex-shrink:0; }
+.shared-comment-list { min-height:44px; flex:1 1 auto; padding:0 20px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.shared-comment-empty { padding:42px 0; text-align:center; color:#a0afc3; }
+.shared-comment-empty>svg { width:27px; height:27px; }
+.shared-comment-empty h4 { font-size:14px; font-weight:500; color:#646e7d; margin:14px 0 9px; }
+.shared-comment-empty p { font-size:12px; line-height:1.8; color:#929baa; }
+.shared-thread { padding:20px 0 12px; border-bottom:1px solid #f0f2f5; }
+.shared-thread:last-child { border-bottom:0; }
+.shared-thread>blockquote { font-size:12px; padding:8px 10px; margin:0 0 18px; border-left:2px solid #c9d7ee; background:#f6f8fc; border-radius:0 5px 5px 0; color:#78869a; overflow:hidden; text-overflow:ellipsis; max-height:76px; }
+.shared-message { display:flex; align-items:flex-start; gap:10px; margin-bottom:16px; outline:none; border-radius:5px; }
+.shared-message:focus { background:#eff5ff; }
+.shared-message>.shared-avatar { width:28px; height:28px; font-size:11px; }
+.shared-message-content { flex:1; min-width:0; }
+.shared-byline { display:flex; align-items:center; gap:8px; padding-top:3px; }
+.shared-byline b { font-weight:600; font-size:12px; color:#424953; overflow-wrap:anywhere; }
+.shared-byline time { font-size:10px; color:#9fa6af; flex-shrink:0; }
+.shared-message-content>p { white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; margin:6px 0!important; font-size:14px; line-height:1.7; color:#303640; }
+.shared-message-content>p.shared-muted { color:#9ba2ac; font-size:12px; }
+.shared-message-content>small { font-size:10px; color:#949daa; }
+.shared-message-actions { display:flex; flex-wrap:wrap; gap:4px; margin:2px 0 0 -6px; }
+.shared-message-actions button { background:transparent; border:0; border-radius:5px; padding:5px 6px; font-size:11px; color:#8591a3; }
+.shared-message-actions button:first-child { color:#6282b0; }
+.shared-message-actions button:hover { color:#2e6de9; background:#eff4fc; }
+.shared-message.reply { padding-left:14px; border-left:1px solid #e7edf6; margin-left:13px; }
+.shared-app .shared-reply-context { display:block; text-align:left; width:100%; margin-top:7px; border:0; border-left:2px solid #d4dfef; border-radius:0 5px 5px 0; padding:5px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:11px; line-height:1.6; background:#f6f8fc; color:#8491a3; }
+.shared-comment-confirm { background:#fff6f3; border:1px solid #f0ded7; border-radius:9px; padding:12px; font-size:12px; line-height:1.6; color:#aa6d5b; margin-bottom:12px; }
+.shared-comment-confirm p { margin-bottom:10px!important; }
+.shared-comment-confirm .shared-danger { font-size:12px; padding:8px 10px; }
+.shared-comment-composer { flex-shrink:0; padding:14px 16px 14px; border-top:1px solid #edf0f4; background:#fff; }
+.shared-compose-body { display:flex; gap:10px; align-items:flex-start; }
+.shared-compose-body>.shared-avatar { margin-top:7px; width:28px; height:28px; }
+.shared-app .shared-comment-composer textarea { display:block; flex:1; width:100%; min-height:72px; height:72px; max-height:160px; resize:vertical; line-height:1.6; font-size:13px; border:1px solid #edf0f5; border-radius:10px; background:#fbfcfe; padding:10px 12px; }
+.shared-app .shared-comment-composer textarea:focus { border-color:#b5cef3; background:#fff; outline:0; box-shadow:0 0 0 2px #2e6de90a; }
+.shared-composer-footer { display:flex; align-items:center; justify-content:space-between; margin:10px 0 0 38px; gap:8px; }
+.shared-composer-footer small { font-size:10px; color:#a0a7b1; }
+.shared-composer-footer .shared-primary { min-height:32px; padding:5px 12px; font-size:12px; border-radius:8px; }
+.shared-composer-target { display:flex; align-items:center; justify-content:space-between; margin:0 0 8px 38px; font-size:12px; color:#6d85a7; }
+.shared-composer-target button { display:flex; align-items:center; justify-content:center; background:transparent; border:0; min-width:30px; min-height:26px; border-radius:5px; }
+@media(max-width:700px) {
+  .shared-comments-layer { background:#151c2b47; pointer-events:auto; }
+  .shared-comments.mobile-sheet { width:auto; max-width:none; left:12px; right:12px; bottom:max(12px,env(safe-area-inset-bottom)); border-radius:20px; max-height:calc(var(--shared-visible-height,100dvh) - 24px - env(safe-area-inset-bottom)); box-shadow:0 12px 50px #111e3b30; }
+  .shared-sheet-grip { display:block; align-self:center; flex-shrink:0; width:30px; height:4px; background:#dfe4ec; border-radius:5px; margin:8px 0 0; }
+  .shared-comments-heading { height:48px; padding-left:18px; padding-right:12px; }
+  .shared-comments-heading h3 { font-size:15px; }
+  .shared-comments-heading .shared-icon { width:38px; height:38px; }
+  .shared-comment-context { padding:8px 18px; }
+  .shared-comment-context button { min-height:28px; font-size:12px; }
+  .shared-comment-list { padding:0 18px; }
+  .shared-thread { padding-top:18px; }
+  .shared-message-actions { gap:5px; }
+  .shared-message-actions button { font-size:12px; min-height:36px; padding:6px 8px; }
+  .shared-message-content>p { font-size:15px; }
+  .shared-byline b { font-size:13px; }
+  .shared-byline time { font-size:11px; }
+  .shared-message.reply { padding-left:11px; margin-left:10px; }
+  .shared-comment-composer { padding:12px 14px; }
+  .shared-app .shared-comment-composer textarea { font-size:16px; height:68px; min-height:68px; max-height:100px; resize:none; padding:9px 10px; }
+  .shared-composer-footer { margin-top:8px; }
+  .shared-composer-footer .shared-primary { min-height:38px; padding:7px 15px; font-size:13px; }
+  .shared-composer-target { margin-bottom:5px; }
+  .shared-composer-target button { height:30px; }
+  .shared-app .shared-paragraph-comment { min-height:32px; font-size:12px; gap:7px; }
+  .shared-paragraph-comment time { font-size:11px; }
+}
+@media(max-width:700px) and (max-height:520px) {
+  .shared-comment-context { display:none; }
+  .shared-comment-empty { padding:14px 0; }
+  .shared-comment-empty>svg { display:none; }
+  .shared-comments-heading { height:42px; }
+  .shared-app .shared-comment-composer textarea { min-height:48px; height:48px; }
+  .shared-composer-footer { margin-top:5px; }
+}

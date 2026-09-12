@@ -62,7 +62,7 @@ public sealed partial class SharedWorkspaceWindow : Window
         var sidebar = new Border { Background = Ui.Shell, Child = sidebarContent };
         Grid.SetRow(sidebar, 1); _shell.Children.Add(sidebar);
         var main = new Grid { RowDefinitions = new("Auto,*") }; main.Children.Add(_banner); Grid.SetRow(_screen, 1); main.Children.Add(_screen); Grid.SetColumn(main, 1); Grid.SetRow(main, 1); _shell.Children.Add(main);
-        _refreshTimer.Tick += async (_, _) => { if (_api != null && _workspace != null && !_refreshing && !_closed) { _refreshing = true; try { await RefreshDocumentsAsync(); } catch (Exception e) when (IsConnectionError(e)) { } finally { _refreshing = false; } } };
+        _refreshTimer.Tick += async (_, _) => { if (_api != null && !_refreshing && !_closed) { _refreshing = true; try { await RefreshPeopleAsync(); await RefreshDocumentsAsync(); } catch (Exception e) when (IsConnectionError(e)) { } finally { _refreshing = false; } } };
         Opened += async (_, _) => await RunAsync(InitializeAsync);
         Closing += async (_, e) =>
         {
@@ -71,14 +71,14 @@ public sealed partial class SharedWorkspaceWindow : Window
             _loadingVersion++; _lifetime.Cancel(); _refreshTimer.Stop(); IsEnabled = false;
             await StopDocumentAsync(); _allowClose = true; Close();
         };
-        Closed += (_, _) => { _closed = true; _api?.Dispose(); _drafts.Dispose(); _lifetime.Dispose(); _refreshTimer.Stop(); };
+        Closed += (_, _) => { _closed = true; _avatars?.Dispose(); _api?.Dispose(); _drafts.Dispose(); _lifetime.Dispose(); _refreshTimer.Stop(); };
         ShowLogin();
     }
     private static TextBlock Label(string text, double size = 13, IBrush? foreground = null, bool bold = false) => new() { Text = text, FontSize = size, Foreground = foreground ?? Ui.Ink, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     private Button ActionButton(string title, string id, Func<Task> action, bool primary = false)
     {
         var button = new Button { Content = title, Padding = new(12, 9), FontSize = 12, HorizontalContentAlignment = HorizontalAlignment.Center, CornerRadius = new(7), Classes = { "quiet" } };
-        if (primary) { button.Classes.Clear(); button.Background = Ui.Chrome("#2E6DE9"); button.Foreground = Ui.Surface; button.BorderThickness = new(0); button.CornerRadius = new(10); }
+        if (primary) { button.Classes.Clear(); button.Classes.Add("sharedPrimary"); button.Background = Ui.Chrome("#2E6DE9"); button.Foreground = Ui.Surface; button.BorderThickness = new(0); button.CornerRadius = new(10); }
         AutomationProperties.SetAutomationId(button, id); AutomationProperties.SetName(button, title); button.Click += async (_, _) => { if (!button.IsEnabled) return; button.IsEnabled = false; try { await RunAsync(action); } finally { button.IsEnabled = true; RefreshSharedUi(); } }; return button;
     }
     private Button NavigationButton(string title, string id, SidebarSymbol symbol, Func<Task> action)
@@ -140,7 +140,7 @@ public sealed partial class SharedWorkspaceWindow : Window
         var form = new StackPanel { Width = 380, VerticalAlignment = VerticalAlignment.Center, Spacing = 8 };
         form.Children.Add(Label("设置你的个人名片", 25, null, true)); form.Children.Add(new TextBlock { Text = "伙伴通过 ID 找到你，评论中会显示你的名字。", Foreground = Ui.Muted, FontSize = 12, Margin = new(0, 5, 0, 24) });
         var display = Input("SharedDisplayName", "你的名字", _profile?.DisplayName); var publicId = Input("SharedPublicId", "your_name", _profile?.PublicId); var password = Input("SharedNewPassword", "设置仅自己知道的密码", password: true);
-        form.Children.Add(Field("你的名字", display)); form.Children.Add(Field("个人 ID", publicId, "3–32 位字母、数字、下划线或短横线")); form.Children.Add(Field("设置新密码", password, "至少 12 个字符，可使用一句容易记住的短语"));
+        form.Children.Add(Field("你的名字", display)); form.Children.Add(Field("个人 ID", publicId, "3–32 位字母、数字、下划线或短横线")); form.Children.Add(Field("设置新密码", password, "至少 6 个字符"));
         var submit = ActionButton("进入工作区  →", "SharedCompleteProfile", async () =>
         {
             if (Composing(form)) return; _profile = await _api!.Request<SharedProfile>("profile", "POST", new SharedProfileSetup(publicId.Text ?? "", display.Text ?? "", password.Text ?? ""), _lifetime.Token); password.Text = ""; await EnterAsync();
@@ -151,7 +151,7 @@ public sealed partial class SharedWorkspaceWindow : Window
         _workspaces = await _api!.Request<SharedWorkspace[]>("workspaces", cancellation: _lifetime.Token); if (_closing) return;
         _workspace = _workspaces.FirstOrDefault(item => item.Id == _localStore.Setting("shared_workspace")) ?? _workspaces.FirstOrDefault();
         _shell.ColumnDefinitions[0].Width = new(284); _refreshTimer.Start(); RefreshNavigation();
-        if (_workspace != null) await RefreshDocumentsAsync(); ShowHome();
+        await RefreshPeopleAsync(); if (_workspace != null) await RefreshDocumentsAsync(); ShowHome();
     }
     private void RefreshNavigation()
     {
@@ -174,15 +174,15 @@ public sealed partial class SharedWorkspaceWindow : Window
         _navigation.Children.Add(row); RefreshDocumentItems();
         _accountArea.Children.Add(new Border { Height = 1, Background = Ui.Line, Margin = new(0, 25, 0, 12) });
         _accountArea.Children.Add(NavigationButton("回收站", "SharedTrash", SidebarSymbol.Trash, async () => { if (!await SaveDraftAsync()) return; await StopDocumentAsync(); _trash = true; await RefreshDocumentsAsync(); RefreshNavigation(); ShowHome(); }));
-        var account = new Grid { ColumnDefinitions = new("42,*,Auto"), Margin = new(4, 10, 0, 0) };
-        account.Children.Add(new Border { Width = 31, Height = 31, CornerRadius = new(16), Background = Ui.Chrome("#ECEFFD"), HorizontalAlignment = HorizontalAlignment.Left,
-            Child = new TextBlock { Text = System.Globalization.StringInfo.GetNextTextElement(_profile?.DisplayName ?? "我"), FontSize = 12, Foreground = Ui.Chrome("#607DB3"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
-        var identity = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center }; identity.Children.Add(Label(_profile?.DisplayName ?? "", 13)); identity.Children.Add(Label("@" + _profile?.PublicId, 10, Ui.Muted)); Grid.SetColumn(identity, 1); account.Children.Add(identity);
+        var account = new Grid { ColumnDefinitions = new("*,Auto"), Margin = new(4, 10, 0, 0) };
+        var identity = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center }; identity.Children.Add(Label(_profile?.DisplayName ?? "", 13)); identity.Children.Add(Label("@" + _profile?.PublicId, 10, Ui.Muted));
+        var identityRow = new Grid { ColumnDefinitions = new("42,*") }; identityRow.Children.Add(AccountAvatar(_profile!.Id, _profile.DisplayName, _profile.Avatar, 31)); Grid.SetColumn(identity, 1); identityRow.Children.Add(identity);
+        var settings = ActionButton("个人设置", "SharedProfileSettingsButton", ProfileSettingsAsync); settings.Content = identityRow; settings.Padding = new(4); settings.HorizontalContentAlignment = HorizontalAlignment.Stretch; account.Children.Add(settings);
         var logout = ActionButton("退出", "SharedLogout", async () =>
         {
             if (!await SaveDraftAsync()) return; await StopDocumentAsync(); await _api!.Request<object>("logout", "POST", cancellation: _lifetime.Token);
-            SharedCredentials.Clear(_localStore); _api.Dispose(); _api = null; _profile = null; _connection = null; _refreshTimer.Stop(); ShowLogin();
-        }); ToolTip.SetTip(logout, "退出登录"); Grid.SetColumn(logout, 2); account.Children.Add(logout); _accountArea.Children.Add(account);
+            SharedCredentials.Clear(_localStore); _avatars?.Dispose(); _avatars = null; _people = []; _api.Dispose(); _api = null; _profile = null; _connection = null; _refreshTimer.Stop(); ShowLogin();
+        }); ToolTip.SetTip(logout, "退出登录"); Grid.SetColumn(logout, 1); account.Children.Add(logout); _accountArea.Children.Add(account);
     }
     private async Task RefreshDocumentsAsync()
     {
@@ -267,7 +267,8 @@ public sealed partial class SharedWorkspaceWindow : Window
         {
             list.Children.Clear(); foreach (var member in await _api!.Request<SharedMember[]>($"workspaces/{workspace.Id}/members", cancellation: _lifetime.Token))
             {
-                var row = new Grid { ColumnDefinitions = new("*,Auto,Auto"), Margin = new(0, 6) }; var name = new StackPanel { Spacing = 5 }; name.Children.Add(Label(member.DisplayName, 13, null, true)); name.Children.Add(Label("@" + member.PublicId, 10, Ui.Muted)); row.Children.Add(name);
+                var row = new Grid { ColumnDefinitions = new("*,Auto,Auto"), Margin = new(0, 6) }; var name = new StackPanel { Spacing = 5 }; name.Children.Add(Label(member.DisplayName, 13, null, true)); name.Children.Add(Label("@" + member.PublicId, 10, Ui.Muted));
+                var person = new Grid { ColumnDefinitions = new("42,*") }; person.Children.Add(AccountAvatar(member.AccountId, member.DisplayName, member.Avatar)); Grid.SetColumn(name, 1); person.Children.Add(name); row.Children.Add(person);
                 var role = new ComboBox { ItemsSource = new[] { "所有者", "可编辑", "仅阅读" }, SelectedIndex = Array.IndexOf(new[] { "owner", "editor", "viewer" }, member.Role), FontSize = 11, IsEnabled = workspace.Role == "owner", MinWidth = 92 };
                 Grid.SetColumn(role, 1); row.Children.Add(role);
                 role.SelectionChanged += async (_, _) => { if (role.SelectedIndex < 0) return; try { await _api.Request<object>($"workspaces/{workspace.Id}/members", "PUT", new SharedMemberInput(member.PublicId, new[] { "owner", "editor", "viewer" }[role.SelectedIndex]), _lifetime.Token); notice.Text = "权限已更新"; } catch (Exception e) when (IsConnectionError(e)) { notice.Text = e.Message; } };

@@ -55,6 +55,32 @@
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Padding" Value="15,9" />
     </Style>
+    <Style Selector="Button.sharedPrimary /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Chrome2E6DE9}" />
+      <Setter Property="Foreground" Value="{DynamicResource ChromeFFFFFF}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Button.sharedPrimary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Chrome245DD0}" />
+    </Style>
+    <Style Selector="Button.sharedPrimary:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Chrome1F52BB}" />
+    </Style>
+    <Style Selector="Button.sharedPrimary:disabled /template/ ContentPresenter">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+    <Style Selector="Button.sharedProfileTab">
+      <Setter Property="Foreground" Value="{DynamicResource Chrome747A84}" />
+      <Setter Property="Padding" Value="12,11" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Button.sharedProfileTab.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Chrome2E6DE9}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Chrome2E6DE9}" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+    </Style>
     <Style Selector="Button.commentSend /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ChromeE6EDFA}" />
       <Setter Property="Foreground" Value="{DynamicResource Chrome365E9D}" />

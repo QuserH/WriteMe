@@ -32,9 +32,14 @@ public sealed class SharedReplicaTests
         a.Apply(b.Replica.State()); b.Apply(a.Replica.State());
         var thread = NoteComments.For(b.Session.Root).Find(threadId)!; Assert.Equal(3, thread.Messages.Length);
         var aReply = thread.Messages.Single(message => message.Text == "第一条回复"); b.Session.ReplyComment(thread, "回复你的回复", aReply.Id); a.Apply(b.Replica.State());
-        Assert.Equal(aReply.Id, NoteComments.For(a.Session.Root).Find(threadId)!.Messages[^1].ReplyTo);
+        var merged = NoteComments.For(a.Session.Root).Find(threadId)!;
+        // Concurrent replies can share a millisecond and use their IDs as a tie-breaker.
+        // Verify this message's identity, not an assumed last position in that order.
+        var nestedReply = Assert.Single(merged.Messages, message => message.Text == "回复你的回复");
+        Assert.Equal(aReply.Id, nestedReply.ReplyTo);
+        Assert.Equal(merged.Messages.OrderBy(message => message.Id).ToArray(), NoteComments.For(b.Session.Root).Find(threadId)!.Messages.OrderBy(message => message.Id).ToArray());
         Assert.Throws<InvalidOperationException>(() => b.Session.EditComment(NoteComments.For(b.Session.Root).Find(threadId)!, aReply.Id, "冒充"));
-        Assert.Equal("b", NoteComments.For(a.Session.Root).Find(threadId)!.Messages[^1].AuthorId);
+        Assert.Equal("b", nestedReply.AuthorId);
     }
     [Fact]
     public void ConcurrentMoveAndTypingKeepTheSameBlockText()

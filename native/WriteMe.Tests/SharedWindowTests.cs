@@ -41,6 +41,48 @@ public sealed class SharedWindowTests
             if (File.Exists(Path.Combine(directory.FullName, "package.json"))) return directory.FullName;
         throw new InvalidOperationException("找不到 WriteME 源码目录");
     }
+    [AvaloniaFact]
+    public async Task NativeProfileDesignerAndSixCharacterPasswordKeepTheActiveEditorAndSession()
+    {
+        using var temporary = new TestDirectory(); await using var host = await SyncTests.Host.Start(Path.Combine(temporary.Path, "server")); var repository = host.Repository;
+        var initial = repository.Login(new("owner", Password))!; var owner = repository.SetupProfile(initial.AccountId, new("profile-owner", "林然", Password));
+        var workspace = repository.CreateWorkspace(owner.Id, "头像与个人资料"); var document = repository.CreateSharedDocument(owner.Id, workspace.Id, "编辑中的文档");
+        using var local = new NoteStore(Path.Combine(temporary.Path, "device")); var window = new SharedWorkspaceWindow(local); window.Show(); Frame(window);
+        try
+        {
+            Find<TextBox>(window, "SharedEndpoint").Text = host.Endpoint.AbsoluteUri; Find<TextBox>(window, "SharedUsername").Text = "owner"; Find<TextBox>(window, "SharedPassword").Text = Password;
+            Click(window, Find<Button>(window, "SharedLogin")); await Wait(() => Has(window, "SharedDocument_" + document.Document.Id));
+            Click(window, Find<Button>(window, "SharedDocument_" + document.Document.Id)); await Wait(() => Has(window, "SharedBlockEditor"));
+            var editor = Find<BlockEditor>(window, "SharedBlockEditor"); editor.FocusText(); window.KeyTextInput("修改个人资料时，继续保留正在编辑的内容。"); Frame(window);
+            await Wait(() => Find<TextBlock>(window, "SharedSaveStatus").Text == "所有更改已保存");
+            var session = editor.Session; var credential = SharedCredentials.Load(local)!;
+            Click(window, Find<Button>(window, "SharedProfileSettingsButton")); await Wait(() => window.OwnedWindows.Count == 1);
+            var settings = window.OwnedWindows.Single(); Frame(settings);
+            Find<TextBox>(settings, "SharedAvatarText").Text = "林";
+            Click(settings, Find<Button>(settings, "SharedAvatarColor_8170AE"));
+            Find<TextBox>(settings, "SharedEditDisplayName").Text = "林然的工作台";
+            Find<TextBox>(settings, "SharedEditPublicId").Text = "new-profile-id";
+            Click(settings, Find<Button>(settings, "SharedSaveProfile"));
+            await Wait(() => repository.Profile(owner.Id).DisplayName == "林然的工作台");
+            await Wait(() => Find<Button>(settings, "SharedSaveProfile").IsEnabled);
+            Assert.Equal("new-profile-id", repository.Profile(owner.Id).PublicId); Assert.Equal("#8170AE", repository.Profile(owner.Id).Avatar!.Color); Assert.Equal("林", repository.Profile(owner.Id).Avatar!.Text);
+            Image(settings, "native-profile-designer.png");
+            Click(settings, Find<Button>(settings, "SharedPasswordTab"));
+            Find<TextBox>(settings, "SharedCurrentPassword").Text = Password; Find<TextBox>(settings, "SharedChangePassword").Text = "654321"; Find<TextBox>(settings, "SharedConfirmPassword").Text = "654321";
+            Click(settings, Find<Button>(settings, "SharedSavePassword"));
+            await Wait(() => string.IsNullOrEmpty(Find<TextBox>(settings, "SharedCurrentPassword").Text));
+            Assert.Null(repository.Authenticate(initial.Token)); Assert.Equal(owner.Id, repository.Authenticate(credential.Login.Token));
+            Assert.Null(repository.Login(new("owner", Password))); Assert.NotNull(repository.Login(new("owner", "654321")));
+            Image(settings, "native-profile-password.png"); settings.Close(); Frame(window);
+            Assert.Same(session, editor.Session); Assert.Contains("修改个人资料时", editor.Session.Projection.Text);
+            editor.Session.AddComment("修改资料后继续评论", NoteComments.CaptureBlock(editor.Session, editor.Session.Projection.Rows[0].Node.Id)); Frame(window);
+            await Wait(() => Find<TextBlock>(window, "SharedSaveStatus").Text == "所有更改已保存");
+            using var saved = new SharedDocumentReplica(repository.SharedDocument(owner.Id, document.Document.Id).State);
+            Assert.Equal("林然的工作台", Assert.Single(NoteComments.For(saved.Read().Root).Threads).Messages[0].Author);
+            editor.OpenParagraphComments(editor.Session.Projection.Rows[0].Node.Id); Frame(window); Image(window, "native-profile-paragraph.png");
+        }
+        finally { foreach (var owned in window.OwnedWindows.ToArray()) owned.Close(); window.Close(); await Wait(() => !window.IsVisible); }
+    }
     private sealed class BrowserPeer : IAsyncDisposable
     {
         private readonly Process _process;

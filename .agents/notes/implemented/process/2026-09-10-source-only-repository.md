@@ -12,6 +12,8 @@ Git 仓库保存当前原生版、同步服务、保留的 Web/Tauri 基线、�
 
 `.dockerignore` 同时排除这些本机文件；镜像通过 Dockerfile 的锁定还原和多阶段构建获得依赖，不复制本机发布目录。`README.md` 提供新克隆的 `npm ci` 与 `dotnet restore --locked-mode` 入口。
 
+Vite 的开发监听同时忽略 `native/`、`artifacts/`、`test-results/` 和 `playwright-report/`。这些不是前端热更新输入；在 Windows 上监听正在写入的原生渲染图会触发 `EBUSY` 并中断网页回归，忽略规则保留正常的 `src/` 热更新。
+
 `.gitattributes` 将源码规范化为 LF，PowerShell 脚本在检出时使用 CRLF，并继续保留其 UTF-8 BOM。图标按二进制处理，避免 Windows 生成的锁文件和 Linux Docker 构建产生无意义的换行差异。
 
 决策技能保留 `SKILL.md`、参考文档、脚本、模板和 `agent-notes-board.html`。上游说明改为本项目的入口，并链接原项目；演示 PNG/SVG 不再进入 Git，本机副本保留。应用图标继续跟随源码，包括原生项目引用的 `src-tauri/icons/icon.ico`。

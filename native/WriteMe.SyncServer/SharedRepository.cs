@@ -28,7 +28,9 @@ public sealed partial class SyncRepository
         using (var reader = command.ExecuteReader()) while (reader.Read()) columns.Add(reader.GetString(1));
         var migrated = !columns.Contains("is_admin");
         foreach (var (name, definition) in new[] { ("public_id", "TEXT"), ("display_name", "TEXT NOT NULL DEFAULT ''"),
-            ("is_admin", "INTEGER NOT NULL DEFAULT 0"), ("disabled", "INTEGER NOT NULL DEFAULT 0"), ("needs_setup", "INTEGER NOT NULL DEFAULT 1") })
+            ("is_admin", "INTEGER NOT NULL DEFAULT 0"), ("disabled", "INTEGER NOT NULL DEFAULT 0"), ("needs_setup", "INTEGER NOT NULL DEFAULT 1"),
+            ("avatar_color", "TEXT NOT NULL DEFAULT '#6C82AD'"), ("avatar_text", "TEXT NOT NULL DEFAULT ''"), ("avatar_version", "TEXT"), ("avatar_image", "BLOB"),
+            ("sync_paused", "INTEGER NOT NULL DEFAULT 0"), ("last_login_at", "INTEGER"), ("last_sync_at", "INTEGER") })
             if (!columns.Contains(name)) { using var alter = Command($"ALTER TABLE accounts ADD COLUMN {name} {definition}"); alter.ExecuteNonQuery(); }
         using var schema = Command("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_public_id ON accounts(public_id COLLATE NOCASE) WHERE public_id IS NOT NULL;
@@ -37,20 +39,25 @@ public sealed partial class SyncRepository
             CREATE TABLE IF NOT EXISTS shared_documents(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES shared_workspaces(id),title TEXT NOT NULL,state BLOB NOT NULL,updated_at INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0);
             CREATE INDEX IF NOT EXISTS idx_shared_documents_workspace ON shared_documents(workspace_id,deleted,updated_at);
             CREATE TABLE IF NOT EXISTS shared_comment_ledger(document_id TEXT NOT NULL REFERENCES shared_documents(id),message_id TEXT NOT NULL,body_hash TEXT NOT NULL,PRIMARY KEY(document_id,message_id,body_hash));
+            CREATE TABLE IF NOT EXISTS account_display_names(account_id TEXT NOT NULL REFERENCES accounts(id),name TEXT NOT NULL,PRIMARY KEY(account_id,name));
+            INSERT OR IGNORE INTO account_display_names(account_id,name) SELECT id,CASE WHEN display_name='' THEN username ELSE display_name END FROM accounts;
             """); schema.ExecuteNonQuery();
+        InitializeSessionMetadata();
         if (migrated)
         {
             // Preserve existing M6 accounts; only the original bootstrap account becomes the server administrator.
             using var promote = Command("UPDATE accounts SET is_admin=1 WHERE rowid=(SELECT MIN(rowid) FROM accounts)"); promote.ExecuteNonQuery();
         }
     }
+    private const string ProfileColumns = "id,username,public_id,display_name,is_admin,disabled,needs_setup,avatar_color,avatar_text,avatar_version,sync_paused";
     private static SharedProfile ReadProfile(SqliteDataReader reader) => new(reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
-        reader.GetString(3) is { Length: > 0 } display ? display : reader.GetString(1), reader.GetBoolean(4), reader.GetBoolean(5), reader.GetBoolean(6));
+        reader.GetString(3) is { Length: > 0 } display ? display : reader.GetString(1), reader.GetBoolean(4), reader.GetBoolean(5), reader.GetBoolean(6),
+        new(reader.GetString(7), reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9)), reader.GetBoolean(10));
     public SharedProfile Profile(string account)
     {
         lock (_gate)
         {
-            using var command = Command("SELECT id,username,public_id,display_name,is_admin,disabled,needs_setup FROM accounts WHERE id=$id", ("$id", account));
+            using var command = Command($"SELECT {ProfileColumns} FROM accounts WHERE id=$id", ("$id", account));
             using var reader = command.ExecuteReader(); if (!reader.Read()) throw new SharedAccessException("账号不存在", 401); return ReadProfile(reader);
         }
     }
@@ -68,9 +75,8 @@ public sealed partial class SyncRepository
     }
     public SharedProfile SetupProfile(string account, SharedProfileSetup setup, string? currentToken = null)
     {
-        var publicId = (setup.PublicId ?? "").Trim().TrimStart('@').ToLowerInvariant(); var name = Name(setup.DisplayName, 40);
-        if (!Regex.IsMatch(publicId, "^[a-z0-9][a-z0-9_-]{2,31}$", RegexOptions.CultureInvariant)) throw new ArgumentException("ID 使用 3–32 位小写字母、数字、下划线或短横线");
-        if (setup.Password is not { Length: >= 12 and <= 1024 }) throw new ArgumentException("密码至少需要 12 个字符");
+        var publicId = AccountProfiles.PublicId(setup.PublicId); var name = Name(setup.DisplayName, 40);
+        AccountProfiles.ValidatePassword(setup.Password);
         var salt = RandomNumberGenerator.GetBytes(32); var hash = Rfc2898DeriveBytes.Pbkdf2(setup.Password, salt, 210000, HashAlgorithmName.SHA256, 32);
         lock (_gate)
         {
@@ -81,6 +87,7 @@ public sealed partial class SyncRepository
                 ("$public", publicId), ("$name", name), ("$salt", salt), ("$hash", hash), ("$id", account));
             command.Transaction = transaction;
             try { command.ExecuteNonQuery(); } catch (SqliteException e) when (e.SqliteErrorCode == 19) { throw new SharedAccessException("这个 ID 已被使用", 409); }
+            RememberDisplayName(account, old.DisplayName, transaction); RememberDisplayName(account, name, transaction);
             command.CommandText = "DELETE FROM sessions WHERE account_id=$id AND token_hash<>$keep";
             command.Parameters.AddWithValue("$keep", currentToken == null ? "" : TokenHash(currentToken)); command.ExecuteNonQuery(); transaction.Commit();
             return Profile(account);
@@ -90,7 +97,7 @@ public sealed partial class SyncRepository
     {
         lock (_gate)
         {
-            Admin(actor); using var command = Command("SELECT id,username,public_id,display_name,is_admin,disabled,needs_setup FROM accounts ORDER BY rowid");
+            Admin(actor); using var command = Command($"SELECT {ProfileColumns} FROM accounts ORDER BY rowid");
             using var reader = command.ExecuteReader(); var result = new List<SharedProfile>(); while (reader.Read()) result.Add(ReadProfile(reader)); return [.. result];
         }
     }
@@ -103,24 +110,30 @@ public sealed partial class SyncRepository
             using var command = Command("UPDATE accounts SET is_admin=$admin WHERE id=$id", ("$admin", input.IsAdmin), ("$id", id)); command.ExecuteNonQuery(); return Profile(id);
         }
     }
-    public SharedProfile ChangeAccount(string actor, string id, SharedAccountChange change)
+    public SharedProfile ChangeAccount(string actor, string id, SharedAccountChange change, string? currentToken = null)
     {
         lock (_gate)
         {
             Admin(actor); var profile = Profile(id);
             if (actor == id && (change.Disabled == true || change.IsAdmin == false)) throw new SharedAccessException("不能停用或移除自己的管理员权限", 409);
-            if (change.Password is { Length: < 12 or > 1024 }) throw new ArgumentException("临时密码至少需要 12 个字符");
+            if (change.Password != null) AccountProfiles.ValidatePassword(change.Password);
+            var username = change.Username == null ? profile.Username : Name(change.Username, 100);
+            var displayName = change.DisplayName == null ? profile.DisplayName : Name(change.DisplayName, 40);
             using var transaction = _database.BeginTransaction();
-            using var command = Command("UPDATE accounts SET disabled=$disabled,is_admin=$admin WHERE id=$id", ("$disabled", change.Disabled ?? profile.Disabled), ("$admin", change.IsAdmin ?? profile.IsAdmin), ("$id", id));
-            command.Transaction = transaction; command.ExecuteNonQuery();
+            using var command = Command("UPDATE accounts SET disabled=$disabled,is_admin=$admin,username=$username,display_name=$name,sync_paused=$paused WHERE id=$id",
+                ("$disabled", change.Disabled ?? profile.Disabled), ("$admin", change.IsAdmin ?? profile.IsAdmin), ("$username", username), ("$name", displayName), ("$paused", change.SyncPaused ?? profile.SyncPaused), ("$id", id));
+            command.Transaction = transaction;
+            try { command.ExecuteNonQuery(); } catch (SqliteException e) when (e.SqliteErrorCode == 19) { throw new SharedAccessException("登录账号已存在", 409); }
+            RememberDisplayName(id, profile.DisplayName, transaction); RememberDisplayName(id, displayName, transaction);
             if (change.Password != null)
             {
                 var salt = RandomNumberGenerator.GetBytes(32); var hash = Rfc2898DeriveBytes.Pbkdf2(change.Password, salt, 210000, HashAlgorithmName.SHA256, 32);
-                command.CommandText = "UPDATE accounts SET salt=$salt,password_hash=$hash,needs_setup=1 WHERE id=$id";
+                command.CommandText = "UPDATE accounts SET salt=$salt,password_hash=$hash,needs_setup=$setup WHERE id=$id";
+                command.Parameters.AddWithValue("$setup", actor != id);
                 command.Parameters.AddWithValue("$salt", salt); command.Parameters.AddWithValue("$hash", hash); command.ExecuteNonQuery();
             }
             if (change.Password != null || change.Disabled == true)
-            { command.CommandText = "DELETE FROM sessions WHERE account_id=$id"; command.ExecuteNonQuery(); }
+            { command.CommandText = "DELETE FROM sessions WHERE account_id=$id AND token_hash<>$keep"; command.Parameters.AddWithValue("$keep", actor == id && currentToken != null && change.Disabled != true ? TokenHash(currentToken) : ""); command.ExecuteNonQuery(); }
             transaction.Commit(); return Profile(id);
         }
     }
@@ -138,7 +151,7 @@ public sealed partial class SyncRepository
         name = Name(name, 80);
         lock (_gate)
         {
-            Ready(actor); var id = Guid.NewGuid().ToString("N"); var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            Ready(actor); EnsureSyncWrite(actor); var id = Guid.NewGuid().ToString("N"); var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             using var transaction = _database.BeginTransaction(); using var command = Command("INSERT INTO shared_workspaces(id,name,created_at) VALUES($id,$name,$now); INSERT INTO shared_members(workspace_id,account_id,role) VALUES($id,$actor,'owner')", ("$id", id), ("$name", name), ("$now", now), ("$actor", actor));
             command.Transaction = transaction; command.ExecuteNonQuery(); transaction.Commit(); return new(id, name, "owner", now);
         }
@@ -155,9 +168,9 @@ public sealed partial class SyncRepository
     {
         lock (_gate)
         {
-            _ = WorkspaceRole(actor, workspace); using var command = Command("SELECT a.id,a.public_id,a.display_name,m.role FROM shared_members m JOIN accounts a ON a.id=m.account_id WHERE m.workspace_id=$workspace ORDER BY m.role,a.display_name", ("$workspace", workspace));
+            _ = WorkspaceRole(actor, workspace); using var command = Command("SELECT a.id,a.public_id,a.display_name,m.role,a.avatar_color,a.avatar_text,a.avatar_version FROM shared_members m JOIN accounts a ON a.id=m.account_id WHERE m.workspace_id=$workspace ORDER BY m.role,a.display_name", ("$workspace", workspace));
             using var reader = command.ExecuteReader(); var result = new List<SharedMember>();
-            while (reader.Read()) result.Add(new(reader.GetString(0), reader.IsDBNull(1) ? "" : reader.GetString(1), reader.GetString(2), reader.GetString(3))); return [.. result];
+            while (reader.Read()) result.Add(new(reader.GetString(0), reader.IsDBNull(1) ? "" : reader.GetString(1), reader.GetString(2), reader.GetString(3), new(reader.GetString(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)))); return [.. result];
         }
     }
     public void SetMember(string actor, string workspace, SharedMemberInput input)
@@ -203,7 +216,7 @@ public sealed partial class SyncRepository
         if (title.Length > 500) throw new ArgumentException("文档标题超过 500 字");
         lock (_gate)
         {
-            var role = WorkspaceRole(actor, workspace); if (!SharedProtocol.CanWrite(role)) throw new SharedAccessException("此工作区仅可阅读");
+            var role = WorkspaceRole(actor, workspace); if (!SharedProtocol.CanWrite(role)) throw new SharedAccessException("此工作区仅可阅读"); EnsureSyncWrite(actor);
             using var replica = new SharedDocumentReplica(); replica.Write(NoteNode.EmptyDocument(), title, trackHistory: false); var state = replica.State();
             var doc = new SharedDocumentInfo(Guid.NewGuid().ToString("N"), workspace, title, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             using var command = Command("INSERT INTO shared_documents(id,workspace_id,title,state,updated_at) VALUES($id,$workspace,$title,$state,$now)", ("$id", doc.Id), ("$workspace", workspace), ("$title", title), ("$state", state), ("$now", doc.UpdatedAt)); command.ExecuteNonQuery();
@@ -220,14 +233,14 @@ public sealed partial class SyncRepository
             { if (!reader.Read()) throw new SharedAccessException("文档不存在", 404); info = ReadDocumentInfo(reader); state = (byte[])reader[5]; }
             var role = WorkspaceRole(actor, info.WorkspaceId);
             if (info.Deleted && !allowDeleted) throw new SharedAccessException("文档已移至回收站", 410);
-            return new(info, role, state);
+            return new(info, role, state, SyncPaused: Profile(actor).SyncPaused);
         }
     }
     public void TrashSharedDocument(string actor, string id, bool deleted)
     {
         lock (_gate)
         {
-            var doc = SharedDocument(actor, id, true); if (!SharedProtocol.CanWrite(doc.Role)) throw new SharedAccessException("此工作区仅可阅读");
+            var doc = SharedDocument(actor, id, true); if (!SharedProtocol.CanWrite(doc.Role)) throw new SharedAccessException("此工作区仅可阅读"); EnsureSyncWrite(actor);
             using var command = Command("UPDATE shared_documents SET deleted=$deleted,updated_at=$now WHERE id=$id", ("$deleted", deleted), ("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), ("$id", id)); command.ExecuteNonQuery();
         }
     }
@@ -236,7 +249,7 @@ public sealed partial class SyncRepository
         if (update.Length is 0 or > SharedDocumentReplica.MaximumStateBytes) throw new InvalidDataException("协同更新超过限制");
         lock (_gate)
         {
-            var current = SharedDocument(actor, document); if (!SharedProtocol.CanWrite(current.Role)) throw new SharedAccessException("此工作区仅可阅读");
+            var current = SharedDocument(actor, document); if (!SharedProtocol.CanWrite(current.Role)) throw new SharedAccessException("此工作区仅可阅读"); EnsureSyncWrite(actor);
             // Validate on a disposable candidate. Rejected CRDT transactions never touch the durable state or a live room.
             using var replica = new SharedDocumentReplica(current.State); var before = replica.Read(); replica.Apply(update); var after = replica.Read();
             if (vector != null && !SharedProtocol.Covers(replica.StateVector(), vector)) throw new SharedAccessException("resync", 409);
@@ -252,6 +265,8 @@ public sealed partial class SyncRepository
                 command.Parameters.Clear(); command.CommandText = "INSERT OR IGNORE INTO shared_comment_ledger(document_id,message_id,body_hash) VALUES($doc,$message,$hash)";
                 command.Parameters.AddWithValue("$doc", document); command.Parameters.AddWithValue("$message", message.Id.ToString("D")); command.Parameters.AddWithValue("$hash", MessageHash(thread.Id, message)); command.ExecuteNonQuery();
             }
+            command.Parameters.Clear(); command.CommandText = "UPDATE accounts SET last_sync_at=$now WHERE id=$actor";
+            command.Parameters.AddWithValue("$now", now); command.Parameters.AddWithValue("$actor", actor); command.ExecuteNonQuery();
             transaction.Commit(); return new(current.Document with { Title = after.Title, UpdatedAt = now }, current.Role, state);
         }
     }
@@ -259,6 +274,9 @@ public sealed partial class SyncRepository
     private void ValidateCommentChanges(string actor, string document, string role, NoteNode before, NoteNode after)
     {
         var old = NoteComments.For(before).Threads.ToDictionary(thread => thread.Id); var next = NoteComments.For(after).Threads.ToDictionary(thread => thread.Id); var profile = Profile(actor);
+        var authorNames = new HashSet<string>(StringComparer.Ordinal) { profile.DisplayName };
+        using (var names = Command("SELECT name FROM account_display_names WHERE account_id=$id", ("$id", actor)))
+        using (var reader = names.ExecuteReader()) while (reader.Read()) authorNames.Add(reader.GetString(0));
         bool Own(CommentMessage message) => message.AuthorId == actor;
         foreach (var thread in old.Values)
             if (!next.ContainsKey(thread.Id) && !Own(thread.Messages[0]) && role != "owner") throw new SharedAccessException("只能删除自己的讨论");
@@ -278,7 +296,7 @@ public sealed partial class SyncRepository
                 }
                 else
                 {
-                    if (Own(message) && message.Author == profile.DisplayName) continue;
+                    if (Own(message) && authorNames.Contains(message.Author)) continue;
                     // Undoing an authorized thread deletion may restore peer messages verbatim, but may never invent them.
                     using var command = Command("SELECT 1 FROM shared_comment_ledger WHERE document_id=$doc AND message_id=$message AND body_hash=$hash", ("$doc", document), ("$message", message.Id.ToString("D")), ("$hash", MessageHash(thread.Id, message)));
                     if (previous != null || command.ExecuteScalar() == null || !Own(thread.Messages[0]) && role != "owner") throw new SharedAccessException("评论作者必须是当前账号");
