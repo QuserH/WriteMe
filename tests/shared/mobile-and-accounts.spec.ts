@@ -58,7 +58,7 @@ test("Android touch: paragraph threads, nested replies, drafts, keyboard viewpor
         { type: "table", content: [0, 1].map(row => ({ type: "tableRow", content: [0, 1, 2, 3].map(col => ({ type: "tableCell", attrs: { colwidth: [160] }, content: [p(row + "-" + col)] })) })) },
       ] }); editor.commands.setTextSelection(2);
     });
-    await peer.getByRole("button", { name: "评论当前段落", exact: true }).click();
+    await peerBody.press("Control+Alt+m");
     await peer.getByRole("textbox", { name: "评论内容" }).fill("这一段在手机上可以看到完整回复。"); await peer.getByRole("button", { name: "发送", exact: true }).click();
     await peer.getByRole("button", { name: "回复", exact: true }).click(); await peer.getByRole("textbox", { name: "评论内容" }).fill("这条是段落评论里的第一条回复。"); await peer.getByRole("button", { name: "发送", exact: true }).click();
     await expect(peer.getByRole("status")).toHaveText("所有更改已保存");
@@ -66,7 +66,11 @@ test("Android touch: paragraph threads, nested replies, drafts, keyboard viewpor
     const body = phone.getByRole("textbox", { name: "共享文档正文" }); await expect(body).toContainText("把想法留在这一段");
     await fits(phone); await expect(body.locator(".shared-columns")).toHaveCSS("flex-direction", "column");
     expect(await body.locator(".tableWrapper").evaluate(element => element.scrollWidth > element.clientWidth)).toBeTruthy();
-    await phone.getByRole("button", { name: "显示工作区导航" }).tap(); await expect(phone.getByRole("complementary", { name: "工作区导航" })).toBeVisible();
+    await phone.getByRole("button", { name: "显示工作区导航" }).tap();
+    const navigation = phone.getByRole("complementary", { name: "工作区导航" }); await expect(navigation).toBeVisible();
+    const topbar = (await phone.locator(".shared-topbar").boundingBox())!;
+    expect((await navigation.boundingBox())!.y).toBeCloseTo(topbar.y + topbar.height, 0);
+    expect((await navigation.locator(".shared-space-picker").boundingBox())!.y - (await navigation.boundingBox())!.y).toBeLessThanOrEqual(18);
     await phone.getByRole("button", { name: "关闭工作区导航", exact: true }).tap();
     await body.locator(".shared-paragraph-comment.has-comments").first().tap();
     await visibleComposer(phone); await expect(phone.locator(".shared-message")).toHaveCount(2);
@@ -82,18 +86,31 @@ test("Android touch: paragraph threads, nested replies, drafts, keyboard viewpor
     await phone.setViewportSize({ width: 390, height: 844 });
     await phone.getByRole("button", { name: "回复", exact: true }).last().tap(); await composer.fill("继续回复手机发出的那条消息。"); await phone.getByRole("button", { name: "发送", exact: true }).tap();
     const parent = phone.locator(".shared-message").filter({ has: phone.getByText("回复的回复草稿，关闭后继续。", { exact: true }) });
+    const deletedId = await parent.getAttribute("data-message-id");
     await parent.getByRole("button", { name: "删除", exact: true }).tap(); await phone.getByRole("button", { name: "确认删除", exact: true }).tap();
-    await expect(phone.getByText("这条回复已删除", { exact: true })).toBeVisible(); await expect(phone.getByText("继续回复手机发出的那条消息。", { exact: true })).toBeVisible();
+    for (const device of [phone, peer]) {
+      await expect(device.locator('[data-message-id="' + deletedId + '"]')).toHaveCount(0);
+      await expect(device.locator(".shared-message")).toHaveCount(3);
+      await expect(device.locator(".shared-comments-heading>div>span")).toHaveText("3");
+      await expect(device.locator(".shared-comment-list")).not.toContainText("已删除");
+      const remaining = device.locator(".shared-message").filter({ has: device.getByText("继续回复手机发出的那条消息。", { exact: true }) });
+      await expect(remaining).toBeVisible(); await expect(remaining.locator(".shared-reply-context")).toHaveCount(0);
+    }
+    await phone.getByRole("button", { name: "回复", exact: true }).last().tap(); await composer.fill("前一条删除后，讨论仍可以继续。");
+    await phone.getByRole("button", { name: "发送", exact: true }).tap();
+    await expect(peer.locator(".shared-message")).toHaveCount(4);
     for (const width of [360, 390, 412]) {
       await phone.setViewportSize({ width, height: 844 }); await visibleComposer(phone); await fits(phone);
       await phone.screenshot({ path: "artifacts/shared-qa/screens/android-comments-" + width + ".png" });
     }
     await phone.getByRole("button", { name: "关闭评论" }).tap();
-    await body.getByText("折叠标题上的评论", { exact: true }).tap(); await body.getByRole("button", { name: "评论当前段落", exact: true }).tap();
+    await body.getByText("折叠标题上的评论", { exact: true }).tap();
+    await phone.getByRole("button", { name: "文档与工作区操作" }).tap(); await phone.getByRole("button", { name: "评论当前段落", exact: true }).tap();
     await composer.fill("折叠标题的段落评论"); await phone.getByRole("button", { name: "发送", exact: true }).tap(); await phone.getByRole("button", { name: "关闭评论" }).tap();
     await body.getByRole("button", { name: "收起折叠块", exact: true }).tap(); await body.locator(".wm-toggle .shared-paragraph-comment.has-comments").tap();
     await expect(phone.getByText("折叠标题的段落评论", { exact: true })).toBeVisible(); await phone.getByRole("button", { name: "关闭评论" }).tap();
-    await body.locator("td").first().tap(); await body.getByRole("button", { name: "评论当前段落", exact: true }).tap();
+    await body.locator("td").first().tap();
+    await phone.getByRole("button", { name: "文档与工作区操作" }).tap(); await phone.getByRole("button", { name: "评论当前段落", exact: true }).tap();
     await composer.fill("单元格里的评论也能打开"); await phone.getByRole("button", { name: "发送", exact: true }).tap(); await phone.getByRole("button", { name: "关闭评论" }).tap();
     await body.locator("td").first().locator(".shared-paragraph-comment.has-comments").tap(); await expect(phone.getByText("单元格里的评论也能打开", { exact: true })).toBeVisible();
     await phone.getByRole("button", { name: "关闭评论" }).tap();

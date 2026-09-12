@@ -1157,7 +1157,7 @@
 @media(max-width:900px) {
   .shared-shell,.shared-shell.sidebar-closed { grid-template-columns:minmax(0,1fr); }
   .shared-main { grid-column:1; }
-  .shared-sidebar { position:absolute; top:48px; bottom:0; left:0; width:min(310px,86vw); background:#fcfdfe; padding:16px; z-index:100; box-shadow:12px 0 40px #17233b15; transform:translateX(-100%); transition:transform .16s; }
+  .shared-sidebar { position:absolute; grid-area:auto; top:48px; bottom:0; left:0; width:min(310px,86vw); background:#fcfdfe; padding:16px; z-index:100; box-shadow:12px 0 40px #17233b15; transform:translateX(-100%); transition:transform .16s; }
   .shared-shell.sidebar-open .shared-sidebar { visibility:visible; transform:translateX(0); }
   .shared-shell.sidebar-closed .shared-sidebar { visibility:hidden; padding:16px; }
   .shared-space-picker select { flex:1; max-width:none; width:0; }

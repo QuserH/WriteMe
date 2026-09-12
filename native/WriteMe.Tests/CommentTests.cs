@@ -247,10 +247,15 @@ public sealed class CommentTests
         Assert.True(final.Messages[1].Deleted); Assert.Equal("", final.Messages[1].Text);
         Assert.Equal(a.Id, final.Messages[2].ReplyTo); Assert.Equal("回复这条回复", final.Messages[2].Text);
         Assert.Equal("还可以继续回复", final.Messages[3].Text);
+        var summary = NoteComments.For(session.Root).Summary();
+        Assert.DoesNotContain("已删除", summary); Assert.DoesNotContain(a.Text, summary);
+        Assert.Contains("我：回复这条回复", summary); Assert.Contains("回复「回复这条回复」：还可以继续回复", summary);
         var reopened = NoteComments.For(NoteJson.ParseStrict(NoteJson.Serialize(session.Root))).Find(id)!;
         Assert.Equal(final.Messages.ToArray(), reopened.Messages.ToArray());
         Assert.Throws<InvalidOperationException>(() => session.EditComment(final, a.Id, "不能改已删除的回复"));
-        session.Undo(); Assert.False(Thread(session, id).Messages[1].Deleted); session.Redo(); Assert.True(Thread(session, id).Messages[1].Deleted);
+        session.Undo(); Assert.False(Thread(session, id).Messages[1].Deleted);
+        Assert.Contains($"回复「{a.Text}」：{b.Text}", NoteComments.For(session.Root).Summary());
+        session.Redo(); Assert.True(Thread(session, id).Messages[1].Deleted);
         var other = session.AddComment("另一条评论");
         Assert.Throws<InvalidOperationException>(() => session.ReplyComment(Thread(session, other), "不能串到另一个帖子", b.Id));
         var root = session.Root;

@@ -263,7 +263,12 @@ public sealed class CommentInteractionTests
         var early = NoteComments.For(seed.Root).Find(first)!.Messages[1];
         seed.ReplyComment(NoteComments.For(seed.Root).Find(first)!, "回应很早的一条消息", early.Id);
         var late = NoteComments.For(seed.Root).Find(first)!.Messages[^1];
-        for (var i = 0; i < 34; i++) seed.AddComment($"另一个话题 {i + 1}");
+        var deleted = NoteComments.For(seed.Root).Find(first)!.Messages.Where((_, i) => i is 10 or 14 or 20).Select(message => message.Id).ToArray();
+        foreach (var id in deleted) seed.DeleteCommentReply(NoteComments.For(seed.Root).Find(first)!, id);
+        var withoutReplies = seed.AddComment("只剩首评的讨论");
+        seed.ReplyComment(NoteComments.For(seed.Root).Find(withoutReplies)!, "随后删除的唯一回复");
+        var emptyThread = NoteComments.For(seed.Root).Find(withoutReplies)!; seed.DeleteCommentReply(emptyThread, emptyThread.Messages[1].Id);
+        for (var i = 0; i < 33; i++) seed.AddComment($"另一个话题 {i + 1}");
         var window = Open(directory, seed.Root);
         try
         {
@@ -271,13 +276,18 @@ public sealed class CommentInteractionTests
             Assert.Equal(30, Pane(window).GetVisualDescendants().OfType<Border>().Count(border => AutomationProperties.GetAutomationId(border)?.StartsWith("CommentThread_") == true));
             Click(window, Find<Button>(window, "CommentsMore"));
             Assert.Equal(35, Pane(window).GetVisualDescendants().OfType<Border>().Count(border => AutomationProperties.GetAutomationId(border)?.StartsWith("CommentThread_") == true));
+            Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "CommentExpand_" + withoutReplies);
             Pane(window).ShowThread(first); Frame(window);
             Assert.Equal(21, Find<Border>(window, "CommentThread_" + first).GetVisualDescendants().OfType<SelectableTextBlock>().Count());
+            Assert.Equal("查看更早的回复（还有 3 条）", Find<Button>(window, "CommentEarlier_" + first).Content);
+            Assert.All(deleted, id => Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<Border>(), border => AutomationProperties.GetAutomationId(border) == "CommentMessage_" + id));
             Click(window, Find<Button>(window, "CommentParent_" + late.Id));
             Assert.Equal(22, Find<Border>(window, "CommentThread_" + first).GetVisualDescendants().OfType<SelectableTextBlock>().Count());
             Assert.True(Find<Border>(window, "CommentMessage_" + early.Id).IsEffectivelyVisible);
+            Assert.Equal("查看更早的回复（还有 2 条）", Find<Button>(window, "CommentEarlier_" + first).Content);
             Click(window, Find<Button>(window, "CommentEarlier_" + first));
-            Assert.Equal(27, Find<Border>(window, "CommentThread_" + first).GetVisualDescendants().OfType<SelectableTextBlock>().Count());
+            Assert.Equal(24, Find<Border>(window, "CommentThread_" + first).GetVisualDescendants().OfType<SelectableTextBlock>().Count());
+            Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "CommentEarlier_" + first);
         }
         finally { await Close(window); }
     }
@@ -424,14 +434,25 @@ public sealed class CommentInteractionTests
             Menu(window, reply.Id, 1); Click(window, Find<Button>(window, "CommentConfirmDelete"));
             var current = NoteComments.For(editor.Session.Root).Find(thread.Id)!;
             Assert.True(current.Messages[1].Deleted); Assert.Equal(reply.Id, current.Messages[2].ReplyTo);
-            Assert.Contains(Pane(window).GetVisualDescendants().OfType<TextBlock>(), text => text.Text == "这条回复已删除");
+            Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<Border>(), border => AutomationProperties.GetAutomationId(border) == "CommentMessage_" + reply.Id);
+            Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "CommentParent_" + nested.Id);
+            Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<TextBlock>(), text => text.Text?.Contains("这条回复已删除") == true);
+            Assert.Equal(3, Find<Border>(window, "CommentThread_" + thread.Id).GetVisualDescendants().OfType<SelectableTextBlock>().Count());
+            Assert.True(Find<Button>(window, "CommentParent_" + last.Id).IsEffectivelyVisible);
             Save(window, "comments-reply-deleted");
             Click(window, Find<Button>(window, "CommentUndoDelete")); Assert.False(NoteComments.For(editor.Session.Root).Find(thread.Id)!.Messages[1].Deleted);
+            Assert.True(Find<Border>(window, "CommentMessage_" + reply.Id).IsEffectivelyVisible);
+            Assert.True(Find<Button>(window, "CommentParent_" + nested.Id).IsEffectivelyVisible);
+            editor.Session.Redo(); Frame(window);
+            Assert.DoesNotContain(Pane(window).GetVisualDescendants().OfType<Border>(), border => AutomationProperties.GetAutomationId(border) == "CommentMessage_" + reply.Id);
+            Click(window, Find<Button>(window, "CommentReplyMessage_" + last.Id)); Send(window, "前面的消息删除后，讨论仍可以继续。");
+            Assert.Equal(last.Id, NoteComments.For(editor.Session.Root).Find(thread.Id)!.Messages[^1].ReplyTo);
         }
         finally { await Close(window); }
         using var store = new NoteStore(directory.Path);
         var saved = NoteComments.For(NoteJson.ParseStrict(store.Get(store.List()[0].Id).Content));
         var messages = Assert.Single(saved.Threads).Messages;
         Assert.Equal(messages[1].Id, messages[2].ReplyTo); Assert.Equal(messages[2].Id, messages[3].ReplyTo);
+        Assert.True(messages[1].Deleted); Assert.Equal(messages[3].Id, messages[4].ReplyTo);
     }
 }

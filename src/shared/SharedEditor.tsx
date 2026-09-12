@@ -70,6 +70,17 @@ export function paragraph(editor: Editor): ParagraphTarget | null {
   for (let depth = $from.depth; depth > 0; depth--) { const node = $from.node(depth); if (node.isTextblock && node.attrs.writemeId) return { id: String(node.attrs.writemeId), text: node.textContent }; }
   return null;
 }
+function paragraphAtBlock(editor: Editor, position: number): ParagraphTarget | null {
+  const node = editor.state.doc.nodeAt(position);
+  if (!node) return null;
+  if (node.isTextblock && node.attrs.writemeId) return { id: String(node.attrs.writemeId), text: node.textContent };
+  let target: ParagraphTarget | null = null;
+  node.descendants(child => {
+    if (target) return false;
+    if (child.isTextblock && child.attrs.writemeId) { target = { id: String(child.attrs.writemeId), text: child.textContent }; return false; }
+  });
+  return target;
+}
 const noMembers: Member[] = [];
 export default function SharedEditor({ live, onComment, onReady, members = noMembers, selectedParagraph }: { live: LiveDocument; onComment: (target: ParagraphTarget | null) => void; onReady?: (editor: Editor) => void; members?: Member[]; selectedParagraph?: string }) {
   const scope = useRef<HTMLDivElement>(null); const writing = useRef(false); const comment = useRef(onComment); comment.current = onComment;
@@ -107,6 +118,7 @@ export default function SharedEditor({ live, onComment, onReady, members = noMem
       editor.setEditable(!!live.canWrite, false);
       const root = supported(live.replica.readRoot()); const next = editor.schema.nodeFromJSON(root);
       if (editor.state.doc.eq(next)) { editor.view.dispatch(editor.state.tr.setMeta("comment-status", true)); redraw(value => value + 1); return; }
+      setMenu(null);
       const locate = (point: typeof selection.anchor) => {
         const offset = point.position ? Y.createAbsolutePositionFromRelativePosition(point.position, live.replica.doc)?.index ?? point.offset : point.offset;
         let found: number | undefined;
@@ -128,9 +140,9 @@ export default function SharedEditor({ live, onComment, onReady, members = noMem
   if (!editor) return null;
   return <div className="shared-editor-wrap wm-editor-scope" ref={scope}>
     <EditorContent editor={editor} />
-    {live.canWrite && <><BlockHandle editor={editor} scopeRef={scope} onOpenMenu={(pos, point) => setMenu({ pos, x: point.left, y: point.top })} /><SharedSlash editor={editor} /><FormattingToolbar editor={editor} /></>}
+    {live.canWrite && <><BlockHandle editor={editor} scopeRef={scope} onOpenMenu={(pos, point) => setMenu({ pos, x: point.left, y: point.top })} /><SharedSlash editor={editor} /><FormattingToolbar editor={editor} onComment={() => onComment(paragraph(editor))} /></>}
     {menu && <div className="wm-block-menu" style={{ left: Math.max(10, Math.min(menu.x - 25, innerWidth - 230)), top: Math.min(menu.y + 30, innerHeight - 260) }} onMouseDown={event => event.preventDefault()} role="menu">
-      <button role="menuitem" onClick={() => { editor.commands.setTextSelection(menu.pos + 1); onComment(paragraph(editor)); setMenu(null); }}><BubbleIcon />评论此段落</button>
+      <button role="menuitem" disabled={!paragraphAtBlock(editor, menu.pos)} onClick={() => { const target = paragraphAtBlock(editor, menu.pos); if (target) onComment(target); setMenu(null); }}><BubbleIcon />评论此段落</button>
       <button role="menuitem" onClick={() => { editor.chain().focus().setNodeSelection(menu.pos).deleteSelection().run(); setMenu(null); }}><Icon name="trash" />删除此块</button>
       <span className="wm-block-menu-sep" /><div className="wm-menu-title">转换为</div>
       {(["paragraph", "h2", "toggle", "taskList"] as const).map(kind => <button role="menuitem" key={kind} onClick={() => { editor.commands.setTextSelection(menu.pos + 1); applyBlockKind(editor.chain().focus(), kind).run(); setMenu(null); }}>{BLOCK_TYPES.find(item => item.kind === kind)?.label}</button>)}

@@ -12,6 +12,7 @@ const shapes = {
   orderedList: <><path d="M8 5h9M8 10h9M8 15h9M2 3h1v4M2 7h2M2 12c0-2 3-2 3 0l-3 4h3" /></>,
   taskList: <><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="m6 10 2.5 2.5L14 7" /></>,
   quote: <><path d="M3 5v10M7 6h10M7 10h10M7 14h7" /></>,
+  comment: <><path d="M17 9.3a6.8 6.8 0 0 1-7 6.5c-1 0-2-.2-2.9-.6L3 17l.8-4A6.1 6.1 0 0 1 3 9.3a7 7 0 0 1 14 0Z" /><path d="M7 8h6M7 11h4" /></>,
   code: <path d="m6 5-4 5 4 5M14 5l4 5-4 5M11 4l-2 12" />,
   search: <><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></>,
   bold: <path d="M6 3.5h5a3.25 3.25 0 0 1 0 6.5H6m0-6.5v13h5.5a3.25 3.25 0 0 0 0-6.5H6" strokeWidth="1.9" />,

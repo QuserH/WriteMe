@@ -52,7 +52,7 @@ export function normalizeLink(value: string): string | null {
   return null;
 }
 
-export default function FormattingToolbar({ editor }: { editor: Editor | null }) {
+export default function FormattingToolbar({ editor, onComment }: { editor: Editor | null; onComment?: () => void }) {
   const [view, setView] = useState<ToolbarState | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [url, setUrl] = useState("");
@@ -274,6 +274,13 @@ export default function FormattingToolbar({ editor }: { editor: Editor | null })
         <button type="button" className="wm-format-button" aria-label="清除文字格式" title="清除文字格式"
           disabled={!view.hasMarks} tabIndex={tabStop === 7 ? 0 : -1} onFocus={() => setTabStop(7)}
           onClick={() => selectedChain()?.unsetAllMarks().run()}><Icon name="eraser" size={18} /></button>
+        {onComment && <><span className="wm-format-separator" />
+          <button type="button" className="wm-format-button" aria-label="评论当前段落" title="评论当前段落 · Ctrl+Alt+M" aria-keyshortcuts="Control+Alt+m"
+            tabIndex={tabStop === 8 ? 0 : -1} onFocus={() => setTabStop(8)} onClick={() => {
+              if (!editor || editor.isDestroyed || !editor.isEditable || editor.view.composing || !sameRange(view, editor.state.selection)) return;
+              dismissedRef.current = { from: view.from, to: view.to }; changePanel(null); setView(null); onComment();
+            }}><Icon name="comment" size={18} /></button>
+        </>}
       </div>
       {panel === "highlight" && (
         <div id={panelId} className="wm-format-panel wm-highlight-panel" role="group" aria-label="高亮颜色选择">

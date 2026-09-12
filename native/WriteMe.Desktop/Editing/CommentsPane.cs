@@ -253,9 +253,11 @@ public sealed class CommentsPane : Border
             if (missing) body.Children.Add(new TextBlock { Text = "原文已删除", FontSize = 10, Foreground = Ui.Muted });
         }
         else body.Children.Add(new TextBlock { Text = "文档评论", FontSize = 10, Foreground = Ui.Muted });
+        var visibleMessages = thread.Messages.Where(message => !message.Deleted).ToArray();
         var replyLimit = _replyLimits.GetValueOrDefault(thread.Id, 20);
-        var recent = thread.Messages.Skip(Math.Max(1, thread.Messages.Length - replyLimit)).Select(message => message.Id).ToHashSet();
-        var messages = expanded ? thread.Messages.Where(message => message.Id == thread.Messages[0].Id || recent.Contains(message.Id) || message.Id == _highlightedMessage) : [thread.Messages[0]];
+        var recent = visibleMessages.Skip(Math.Max(1, visibleMessages.Length - replyLimit)).Select(message => message.Id).ToHashSet();
+        var messages = expanded ? visibleMessages.Where(message => message.Id == thread.Messages[0].Id || recent.Contains(message.Id) || message.Id == _highlightedMessage) : [thread.Messages[0]];
+        var earlierCount = visibleMessages.Count(message => message.Id != thread.Messages[0].Id && !recent.Contains(message.Id) && message.Id != _highlightedMessage);
         var repliesBody = new StackPanel { Spacing = 16 };
         var replyFrame = new Border { Child = repliesBody, Padding = new(14, 2, 0, 0), Margin = new(13, 0, 0, 0), BorderBrush = Ui.Line, BorderThickness = new(1, 0, 0, 0) };
         var byId = thread.Messages.ToDictionary(message => message.Id);
@@ -269,11 +271,6 @@ public sealed class CommentsPane : Border
             var messageFrame = new Border { Child = messageLayout, CornerRadius = new(6),
                 Background = _highlightedMessage == message.Id ? Ui.Chrome("#EFF3F8") : Brushes.Transparent, Classes = { "commentMessage" } };
             AutomationProperties.SetAutomationId(messageFrame, "CommentMessage_" + message.Id);
-            if (message.Deleted)
-            {
-                messageBody.Children.Add(new TextBlock { Text = "这条回复已删除", FontSize = 11, Foreground = Ui.Muted, Margin = new(0, 4) });
-                repliesBody.Children.Add(messageFrame); continue;
-            }
             var head = new Grid { ColumnDefinitions = new("*,Auto") };
             var avatar = new Border { Width = 26, Height = 26, CornerRadius = new(13), Background = Ui.Chrome("#EFF2F6"), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left,
                 Child = new TextBlock { Text = StringInfo.GetNextTextElement(message.Author), FontSize = 10, Foreground = Ui.Chrome("#5B6573"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
@@ -295,9 +292,9 @@ public sealed class CommentsPane : Border
             menuButton.MinHeight = 22; menuButton.Padding = new(5, 3); menuButton.Classes.Add("commentMore");
             menuButton.IsVisible = session!.CanEditComment(message) || session.CanDeleteComment(message);
             Grid.SetColumn(menuButton, 1); head.Children.Add(menuButton); messageBody.Children.Add(head);
-            if (parent != null)
+            if (parent is { Deleted: false })
             {
-                var target = Button(new TextBlock { Text = $"回复 {parent.Author} · {(parent.Deleted ? "这条回复已删除" : NoteComments.Abbreviate(parent.Text.Replace('\n', ' '), 60))}",
+                var target = Button(new TextBlock { Text = $"回复 {parent.Author} · {NoteComments.Abbreviate(parent.Text.Replace('\n', ' '), 60)}",
                     FontSize = 10, Foreground = Ui.Muted, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis },
                     "查看这条消息回复的原消息", "CommentParent_" + message.Id, () => { if (Current(session, false)) ShowMessage(thread.Id, parent.Id); });
                 target.Padding = new(0); target.MinHeight = 16; target.HorizontalContentAlignment = HorizontalAlignment.Left;
@@ -310,32 +307,31 @@ public sealed class CommentsPane : Border
             reply.IsVisible = CanEdit;
             messageBody.Children.Add(reply);
             if (isReply) repliesBody.Children.Add(messageFrame); else body.Children.Add(messageFrame);
-            if (expanded && message.Id == thread.Messages[0].Id && thread.Messages.Length > replyLimit + 1)
-                body.Children.Add(Button($"查看更早的回复（还有 {thread.Messages.Length - replyLimit - 1} 条）", "显示更早的回复", "CommentEarlier_" + thread.Id,
+            if (expanded && message.Id == thread.Messages[0].Id && earlierCount > 0)
+                body.Children.Add(Button($"查看更早的回复（还有 {earlierCount} 条）", "显示更早的回复", "CommentEarlier_" + thread.Id,
                     () => { _replyLimits[thread.Id] = replyLimit + 20; Refresh(true); }));
         }
         if (repliesBody.Children.Count > 0) body.Children.Add(replyFrame);
         if (_delete is { } pending && pending.Thread.Id == thread.Id)
         {
-            body.Children.Add(new TextBlock { Text = pending.Message == null ? $"删除这条评论及全部 {thread.Messages.Count(message => !message.Deleted) - 1} 条回复？" : "删除这条回复？后续回复会保留。", FontSize = 12, TextWrapping = TextWrapping.Wrap });
+            body.Children.Add(new TextBlock { Text = pending.Message == null ? $"删除这条评论及全部 {visibleMessages.Length - 1} 条回复？" : "删除这条回复？后续回复会保留。", FontSize = 12, TextWrapping = TextWrapping.Wrap });
             var confirm = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             confirm.Children.Add(Button("确认删除", "确认删除评论，可撤销", "CommentConfirmDelete", () =>
             {
-                if (Run(session, () => { if (pending.Message is { } message) session!.DeleteCommentReply(pending.Thread, message); else session!.DeleteComment(pending.Thread); }, "评论已删除"))
+                if (Run(session, () => { if (pending.Message is { } message) session!.DeleteCommentReply(pending.Thread, message); else session!.DeleteComment(pending.Thread); }, null))
                 { _delete = null; _undoRevision = session!.Revision; Refresh(true); }
             }));
             confirm.Children.Add(Button("取消", "取消删除", "CommentCancelDelete", () => { _delete = null; Refresh(true); })); body.Children.Add(confirm);
         }
-        else if (!expanded && (thread.Messages.Length > 1 || thread.Messages[0].Text.Length > 240))
-            body.Children.Add(Button(thread.Messages.Length > 1 ? $"查看 {thread.Messages.Count(message => !message.Deleted) - 1} 条回复" : "展开评论", "显示完整评论和回复", "CommentExpand_" + thread.Id, () => { if (Current(session, false)) ShowThread(thread.Id); }));
+        else if (!expanded && (visibleMessages.Length > 1 || thread.Messages[0].Text.Length > 240))
+            body.Children.Add(Button(visibleMessages.Length > 1 ? $"查看 {visibleMessages.Length - 1} 条回复" : "展开评论", "显示完整评论和回复", "CommentExpand_" + thread.Id, () => { if (Current(session, false)) ShowThread(thread.Id); }));
         return card;
     }
 
     private void ShowMessage(Guid threadId, Guid messageId)
     {
         if (_session == null || NoteComments.For(_session.Root).Find(threadId) is not { } thread) return;
-        var position = Array.FindIndex(thread.Messages.ToArray(), message => message.Id == messageId);
-        if (position < 0) return;
+        if (!thread.Messages.Any(message => message.Id == messageId && !message.Deleted)) return;
         _highlightedMessage = messageId;
         ShowThread(threadId);
         Dispatcher.UIThread.Post(() => _list.GetVisualDescendants().OfType<Control>().FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == "CommentMessage_" + messageId)?.BringIntoView());
@@ -471,7 +467,7 @@ public sealed class CommentsPane : Border
         SetStatus(IsContextual ? null : draft.Message != null ? "评论已更新" : "评论已添加"); FocusComposer();
     }
 
-    private bool Run(DocumentSession? expected, Action action, string success)
+    private bool Run(DocumentSession? expected, Action action, string? success)
     {
         if (!Current(expected)) return false;
         try { action(); SetStatus(success); Refresh(true); return true; }

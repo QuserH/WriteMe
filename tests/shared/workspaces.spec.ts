@@ -32,7 +32,7 @@ test("admin, two accounts, shared paragraph comments, menus and durable reconnec
   await peer.reload(); await peer.getByRole("button", { name: "九月 · 产品工作手记" }).first().click(); await expect(peer.getByRole("textbox", { name: "共享文档正文" })).toContainText("把零散的想法");
   await body.click(); await page.keyboard.press("Control+End"); await page.keyboard.insertText(" 桌面端"); const peerBody = peer.getByRole("textbox", { name: "共享文档正文" }); await peerBody.click(); await peer.keyboard.press("Control+End"); await peer.keyboard.insertText(" 网页端");
   await expect(body).toContainText("网页端"); await expect(peerBody).toContainText("桌面端");
-  await page.getByRole("button", { name: "评论当前段落", exact: true }).click(); await page.getByRole("textbox", { name: "评论内容" }).fill("这段思路可以再补一个具体例子。"); await page.getByRole("button", { name: "发送", exact: true }).click();
+  await body.press("Control+Alt+m"); await page.getByRole("textbox", { name: "评论内容" }).fill("这段思路可以再补一个具体例子。"); await page.getByRole("button", { name: "发送", exact: true }).click();
   await peer.getByRole("button", { name: "查看全部评论" }).click(); await expect(peer.getByText("这段思路可以再补一个具体例子。", { exact: true })).toBeVisible();
   await peer.getByRole("button", { name: "回复", exact: true }).first().click(); await peer.getByRole("textbox", { name: "评论内容" }).fill("好，我来补上用户场景。"); await peer.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByText("好，我来补上用户场景。", { exact: true })).toBeVisible(); await page.getByRole("button", { name: "回复", exact: true }).last().click(); await page.getByRole("textbox", { name: "评论内容" }).fill("收到，我们接着这条回复讨论。"); await page.getByRole("button", { name: "发送", exact: true }).click(); await expect(peer.getByText("收到，我们接着这条回复讨论。", { exact: true })).toBeVisible();

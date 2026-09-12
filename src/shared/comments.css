@@ -1,4 +1,7 @@
-.shared-comment-anchor { display:block; max-width:100%; width:fit-content; font:400 12px/1.4 "Segoe UI","Microsoft YaHei UI",sans-serif; user-select:none; margin:5px 0 0; }
+.shared-comment-anchor { display:flex; align-items:center; max-width:100%; font:400 12px/1.4 "Segoe UI","Microsoft YaHei UI",sans-serif; user-select:none; margin:3px 0 5px; }
+.shared-editor .shared-commented-block { margin-bottom:0!important; }
+.shared-editor>.shared-comment-anchor { max-width:720px; margin:3px auto 12px; }
+.shared-editor .wm-toggle[data-collapsed="true"]>.wm-toggle-content>.shared-comment-anchor.toggle-title-comments { display:flex; margin-bottom:0; }
 .shared-app .shared-paragraph-comment { display:inline-flex; align-items:center; gap:8px; max-width:100%; background:transparent; border:0; border-radius:7px; padding:3px 5px 3px 0; color:#8a929d; font-size:11px; font-weight:400; line-height:22px; white-space:nowrap; }
 .shared-app .shared-paragraph-comment.has-comments { color:#677d9c; }
 .shared-app .shared-paragraph-comment:hover { color:#326ecf; background:#f1f5fd; }
@@ -33,7 +36,6 @@
 .shared-byline b { font-weight:600; font-size:12px; color:#424953; overflow-wrap:anywhere; }
 .shared-byline time { font-size:10px; color:#9fa6af; flex-shrink:0; }
 .shared-message-content>p { white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; margin:6px 0!important; font-size:14px; line-height:1.7; color:#303640; }
-.shared-message-content>p.shared-muted { color:#9ba2ac; font-size:12px; }
 .shared-message-content>small { font-size:10px; color:#949daa; }
 .shared-message-actions { display:flex; flex-wrap:wrap; gap:4px; margin:2px 0 0 -6px; }
 .shared-message-actions button { background:transparent; border:0; border-radius:5px; padding:5px 6px; font-size:11px; color:#8591a3; }

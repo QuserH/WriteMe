@@ -27,7 +27,7 @@ Web 基线源码里程碑：M0/M1 完成；M2 自研块拖拽、多级折叠、�
 | 斜杠菜单 | 分类/二级导航、全局搜索、原子命令与区域浮层 | Desktop 的 `Editing/SlashCommandMenu.cs` / `BlockEditor.Commands.cs`，Core 的 `SlashCommands.cs` |
 | 拖动落点、预览与光标 | 相邻块边界、可见子树只读预览、按文字度量的光标与预编辑 | Core 的 `BlockDropTargets.cs`，Desktop 的 `Editing/BlockDragPreview.cs` / `BlockCaretGeometry.cs` |
 | 选区格式 | 原生浮动工具栏、文字色/高亮、链接草稿、键盘导航 | `native/WriteMe.Desktop/Editing/FormattingToolbar.cs` / `TextColorPicker.cs`，核心在 `native/WriteMe.Core/SelectionFormats.cs` / `TextColor.cs` |
-| 段落评论 | 段落气泡/浮层、逐条回复与回复的回复、删除占位、选区批注 | Core 的 `NoteComments.cs` / `CommentCommands.cs`，Desktop 的 `Editing/BlockEditor.ParagraphComments.cs` / `BlockEditor.Comments.cs` / `CommentsPane.cs` / `MainWindow.Comments.cs` |
+| 段落评论 | 段落气泡/浮层、逐条回复与回复的回复、删除/撤销、选区批注 | Core 的 `NoteComments.cs` / `CommentCommands.cs`，Desktop 的 `Editing/BlockEditor.ParagraphComments.cs` / `BlockEditor.Comments.cs` / `CommentsPane.cs` / `MainWindow.Comments.cs` |
 | 左侧导航与文内查找 | 空间/文档模式、目录、任务、附件/链接、查找替换与区域高亮 | Desktop 的 `Editing/DocumentOutlinePane.cs` / `.Navigation.cs` / `BlockEditor.Search.cs`，Core 的 `DocumentTools.cs` / `DocumentNavigation.cs`，窗口布局在 `MainWindow.axaml` / `.cs` |
 | 右侧工具 | 纸张外的插入/格式/样式/信息横向标签、收起胶囊、双侧栏响应布局 | `native/WriteMe.Desktop/Editing/EditorSidebar.cs` / `SidebarGlyph.cs`，扩展面板在 `MainWindow.Appearance.cs` |
 | 表格与分栏 | 区域编辑、共享历史、行列/宽度/比例、TSV、对齐 | Core 的 `LayoutBlocks.cs` / `ScopedSessions.cs`，Desktop 的 `Editing/BlockEditor.Layouts.cs` / `NativeTableView*.cs` / `NativeColumnsView.cs` |
@@ -101,7 +101,7 @@ npm run init-board          # 生成决策看板 board.html
 - 更新发布锁使用 `dotnet restore ... -p:RuntimeIdentifier=win-x64 --force-evaluate`。单独 `dotnet restore --runtime win-x64` 设置的属性不同，会把运行目标写进普通锁；审核后用普通还原恢复普通锁的目标列表。完整原生回归含 Chromium 联动，先 `npm run build` 和 `npx playwright install chromium`；发布程序运行不依赖它们。
 - Markdown 使用 Markdig `1.3.2`；Windows 凭据使用 ProtectedData `10.0.12`。Docker 构建按锁文件 restore，不把 `.env`、本机资产和凭据放进镜像或提交。
 - 两个原生 PowerShell 脚本保留 UTF-8 BOM，Windows PowerShell 5 读取无 BOM 中文会误解析。发布时若同目录程序在运行，使用 `npm run native:release -- -OutputDirectory artifacts/native/<版本目录>`，不要强行关闭用户程序。成功发布才更新最近版本清单；用户关闭旧窗口后自行启动新版。
-- 用户已要求自行测试，不要控制其桌面窗口。UI 自动验证用 Avalonia headless 与隔离资料库；`WRITEME_QA_ARTIFACTS` 可指定格式浮层、折叠和右侧工具栏的 PNG 输出目录，供渲染检查。
+- 用户于 2026-09-12 明确要求“除了数据层，我自己测试就行”。Agent 只运行数据层回归、编译和发布健康/数据一致性检查，界面及手机操作由用户验收，不控制其桌面窗口。保留 UI 回归脚本供后续按需启用；获用户要求再做 UI 验证时使用 Avalonia headless、隔离资料库和浏览器测试账号。`WRITEME_QA_ARTIFACTS` 可指定 PNG 输出目录。
 - AvaloniaEdit 11.4.1 的 `ScrollToVerticalOffset` 是空实现；拖动边缘滚动要更新模板 ScrollViewer 的 Offset，不能只改变 TextView 后又被容器旧值覆盖。
 - 默认 Caret 按整行高度绘制，会包含 28/36px 块留白。`BlockCaretGeometry` 按当前文字字体和基线裁剪原生 CaretLayer，保留原有闪烁与焦点，IME 和预编辑共用坐标。通过固定版本的层类型名识别；升级 AvaloniaEdit 必须验证实际光标像素、标题/正文、软换行、行距和中文定位，不能只检查模型。
 - AvaloniaEdit 11.4.1 的继承换行缩进没有实际生效，Avalonia 11.3.21 也不实现段落 Indent。`BlockTextFormatter` 只在本编辑器的 TextView 装配续行适配，保留原生文字索引和断行缓存；绘制、命中、选区矩形必须一起平移。三个 `UnsafeAccessor` 绑定固定包的字段/构造签名，升级排版包必须重新验证长标题、软换行、点击与中文光标，公开接口补齐后删除适配。禁止用实际空格/换行污染正文来模拟缩进。
@@ -122,7 +122,8 @@ npm run init-board          # 生成决策看板 board.html
 - `documents(id, title, content, created_at, updated_at)`，WAL；两版 `content` 均使用 **TipTap 块 JSON 字符串**。原生 `NoteJson` 兼容旧纯文本、旧空折叠标题、marks 与未知节点；Web 由 `src/editor/doc.ts#parseContent` 迁移。两个资料库后续修改独立，不做双向同步。
 - 新增块类型/序列化改动同步原生 `NoteJson`、`DocumentProjection`、相关回归与原生决策笔记；涉及 Web 时同步 `src/editor/doc.ts` 与 [M1 决策笔记](.agents/notes/implemented/feature/2026-09-08-m1-tiptap-block-editor.md)。保持旧 `src/lib/api.ts` 契约。
 - 原生文字、格式、折叠、拖动都经过 `DocumentSession`，共用 200 项有界历史；不要另开 UI 撤销栈。原生 650ms 自动保存在后台串行完成，切换和关闭必须等待保存。相同标题与正规化正文的保存必须无操作；Avalonia 标题变更事件会延后触发，不能只用 `_loading` 阻止远端显示刷新置脏。
-- **评论遵循帖子式回复，用户明确不需要已解决/未解决**。根 `writemeComments` 目录、段落 `writemeCommentIds` 属性和文字 `comment` marks 同属根会话；`replyTo` 指向同一讨论内已有消息。删除回复保留空正文墓碑与后续回复，删除首评才删除整条讨论，均可撤销。复制块剥离关联、整篇副本保留；清除格式和转代码块不能丢批注，整格替换保留首段评论。无选区 Ctrl+Alt+M 评论当前段，空段/单元格/栏也支持。浮层只显示当前段、全文入口显示全部；草稿按回复目标保留，旧会话/失效原文/预编辑不能误提交。完整契约见 [原生评论](.agents/notes/implemented/feature/2026-09-11-native-comments.md)。
+- **评论遵循帖子式回复，用户明确不需要已解决/未解决**。根 `writemeComments` 目录、段落 `writemeCommentIds` 属性和文字 `comment` marks 同属根会话；`replyTo` 指向同一讨论内已有消息。删除回复内部保留空正文标记及父关系，后续回复保留；界面直接隐藏该消息和指向它的引用，不显示删除占位，也不计入分页。删除首评才删除整条讨论，均可撤销。复制块剥离关联、整篇副本保留；清除格式和转代码块不能丢批注，整格替换保留首段评论。无选区 Ctrl+Alt+M 评论当前段，空段/单元格/栏也支持。浮层只显示当前段、全文入口显示全部；草稿按回复目标保留，旧会话/失效原文/预编辑不能误提交。完整契约见 [原生评论](.agents/notes/implemented/feature/2026-09-11-native-comments.md)。
+- 共享网页不在无评论段落后常驻“添加评论”；添加入口属于块操作、文字选区工具栏和手机“…”菜单。已有评论摘要使用文字块之后的 PM widget，不能塞进段尾文字行，否则尾部 `br` 会产生假空行并误导光标。折叠时只保留标题摘要，隐藏子段摘要；手机抽屉转绝对定位须重置 `grid-area`，不能重复叠加第二行和顶栏偏移。
 - `/` 先分类再进入二级菜单；确认叶项才通过 `ApplySlash` 原子移除查询并应用，格式/颜色/缩进用分离草稿提交一次根历史。输入焦点保留，旧按钮、Revision、选区、前缀、IME 与 `IsEffectivelyEnabled` 都须核对。插入侧栏继续复用独立的 `BlockCommand.All/Search`。
 - 区域浮层通过 `OverlayOwner/MountOverlay` 挂到根编辑区，不能被单元格裁剪；IME、取消拖动、当前菜单优先于区域 Tab/Escape。`DetachedFromVisualTree` 期间只隐藏并释放状态，归还浮层延到 Dispatcher，不能同步修改 Avalonia 正遍历的祖先子集合。
 - 拖动期望深度按抓取点的横向位移以 28px 一档计算，不用文字起点的绝对阈值；Core `ResolveBlockDrop` 按相邻可见块的共同边界选择实际层级，父标题下沿进入首项，明确左拖可退出祖先。先选层级再用 `CanMove` 排除空移动，不能跨层回退。提示线和提交共用目标，展开块后的线在最后一个可见后代后；横向起点按移动块在目的层级的前缀计算，不能取相邻正文的前缀。预览复用只读原生表面及单元格行高，宽度与断行取源区域，长子树保留有限视口；取消/释放/关闭必须释放预览。
@@ -174,4 +175,4 @@ npm run init-board          # 生成决策看板 board.html
 - TS：`strict` + `noUnusedLocals/Parameters`；界面文案一律中文；主题色用 `src/styles.css` 的 CSS 变量。
 - 新增 IPC 命令时同步：Rust command + `generate_handler!` + `src/lib/api.ts` 双后端 + types.ts。
 - 每次完成改动：`npm run build`（前端）通过 + `cargo build` 通过 + `npm run verify-notes` 通过。
-- 涉及原生代码另跑 `npm run native:build` + `npm run native:test`；交付原生程序用 `npm run native:release`，并确认最新发布文件可运行。
+- 涉及原生代码另跑 `npm run native:build` 及相关数据层测试；按用户当前要求不自动运行 UI 回归。交付原生程序用 `npm run native:release`，并以隔离目录和无窗口 smoke 确认运行时及数据读写可用。

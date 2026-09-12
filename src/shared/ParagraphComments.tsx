@@ -113,16 +113,16 @@ export function ParagraphComments({ live, profile, members, target, close, all }
         {!threads.length && <div className="shared-comment-empty"><BubbleIcon /><h4>写下第一条评论</h4><p>留一个想法，或和伙伴接着聊。</p></div>}
         {threads.map(thread => <section key={thread.id} className="shared-thread" data-thread-id={thread.id}>
           {!target && thread.anchored && <blockquote>{thread.quote || "空白段落"}</blockquote>}
-          {thread.messages.map((message, i) => {
-            const parent = thread.messages.find(item => item.id === message.replyTo);
+          {thread.messages.filter(message => !message.deleted).map(message => {
+            const parent = thread.messages.find(item => item.id === message.replyTo && !item.deleted);
             const person = message.authorId === profile.id ? profile : live.peers.find(item => item.accountId === message.authorId) ?? members.find(item => item.accountId === message.authorId);
-            return <div key={message.id} className={"shared-message" + (i ? " reply" : "")} data-message-id={message.id} tabIndex={-1}>
+            return <div key={message.id} className={"shared-message" + (message.id !== thread.messages[0].id ? " reply" : "")} data-message-id={message.id} tabIndex={-1}>
               <UserAvatar name={person?.displayName ?? message.author} accountId={message.authorId} avatar={person?.avatar} />
               <div className="shared-message-content"><div className="shared-byline"><b>{person?.displayName ?? message.author}</b><time title={new Date(message.createdAt).toLocaleString("zh-CN")}>{relativeTime(message.createdAt)}</time></div>
-                {parent && <button className="shared-reply-context" onClick={() => locate(parent.id)}>回复 {parent.author}：{parent.deleted ? "这条回复已删除" : parent.text.slice(0, 80)}</button>}
-                <p className={message.deleted ? "shared-muted" : ""}>{message.deleted ? "这条回复已删除" : message.text}</p>
+                {parent && <button className="shared-reply-context" onClick={() => locate(parent.id)}>回复 {parent.author}：{parent.text.slice(0, 80)}</button>}
+                <p>{message.text}</p>
                 {message.editedAt && <small className="shared-muted">已编辑</small>}
-                {!message.deleted && live.canWrite && <div className="shared-message-actions">
+                {live.canWrite && <div className="shared-message-actions">
                   <button onClick={() => { choose({ mode: "reply", threadId: thread.id, message }); input.current?.focus({ preventScroll: true }); }}>回复</button>
                   {own(message) && <button onClick={() => { choose({ mode: "edit", threadId: thread.id, message }); input.current?.focus({ preventScroll: true }); }}>编辑</button>}
                   {(own(message) || live.role === "owner") && <button onClick={() => setConfirm({ thread, message })}>删除</button>}

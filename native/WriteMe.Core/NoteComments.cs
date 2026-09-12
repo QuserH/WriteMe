@@ -281,11 +281,10 @@ public sealed class NoteComments
     {
         var messages = thread.Messages.ToDictionary(message => message.Id);
         return $"{(thread.Anchored ? (thread.WholeBlock ? "段落：" : "引用：") + thread.Quote : "文档评论")}\n" +
-            string.Join("\n", thread.Messages.Select(message =>
+            string.Join("\n", thread.Messages.Where(message => !message.Deleted).Select(message =>
             {
-                if (message.Deleted) return "[这条回复已删除]";
                 var parent = message.Id == thread.Messages[0].Id ? null : messages.GetValueOrDefault(message.ReplyTo ?? thread.Messages[0].Id);
-                return $"{message.Author}{(parent != null ? " 回复「" + (parent.Deleted ? "已删除的回复" : Abbreviate(parent.Text, 60)) + "」" : "")}：{message.Text}";
+                return $"{message.Author}{(parent is { Deleted: false } ? " 回复「" + Abbreviate(parent.Text, 60) + "」" : "")}：{message.Text}";
             }));
     })));
 
